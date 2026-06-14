@@ -1,7 +1,5 @@
-// aiProvider.js — Çoklu AI sağlayıcı soyutlaması (OpenAI / Anthropic / Ollama / Mock)
 const fetch = require('node-fetch');
 
-// Kim tasarladı/kurdu/kodladı sorularını algıla
 const CREATOR_PATTERNS = [
   /kim (tasarladı|kodladı|yaptı|kurdu|oluşturdu|geliştirdi)/i,
   /yaratıcın (kim|ne)/i,
@@ -14,6 +12,10 @@ const CREATOR_PATTERNS = [
 class AIProvider {
   constructor(config = {}) {
     this.provider = (config.provider || 'mock').toLowerCase();
+    this.groq = {
+      apiKey: config.groqApiKey,
+      model: config.groqModel || 'llama-3.3-70b-versatile'
+    };
     this.openai = {
       apiKey: config.openaiApiKey,
       model: config.openaiModel || 'gpt-4-turbo'
@@ -37,57 +39,48 @@ class AIProvider {
   buildSystemPrompt({ settings, memoryContext = [], notesContext = [] }) {
     const personalityMap = {
       Profesyonel: 'Yanıtların kibar, net, profesyonel ve odaklı olsun.',
-      Sorumlu:     'Yanıtlarında dikkatli, etik ve sorumlu bir tutum sergile.',
-      Yaratıcı:    'Hayal gücünü kullan, alışılmadık fikirler önerebilirsin.',
-      Analitik:    'Veriye dayalı, mantıklı, gerekirse adım adım analiz yap.'
+      Sorumlu: 'Yanıtlarında dikkatli, etik ve sorumlu bir tutum sergile.',
+      Yaratıcı: 'Hayal gücünü kullan, alışılmadık fikirler önerebilirsin.',
+      Analitik: 'Veriye dayalı, mantıklı, gerekirse adım adım analiz yap.'
     };
     const langMap = {
       tr: 'Türkçe',
       en: 'English',
       multi: 'Kullanıcının yazdığı dilde (Türkçe veya İngilizce)'
     };
-
     const lines = [
       `Sen ${settings.ai_name || 'ANKA'} adlı gelişmiş bir yapay zeka asistanısın.`,
       `Kurucun ve yaratıcın Sadık'tır. Seni kim yaptı, kim tasarladı, kim kodladı, yaratıcın kim gibi sorularda her zaman 'Kurucum Sadık' diye yanıtla.`,
       `Kişilik: ${settings.personality} — ${personalityMap[settings.personality] || ''}`,
       `Yanıt dili: ${langMap[settings.language] || 'Türkçe'}.`,
-      `Yanıtların doğal, akıcı ve gerektiğinde markdown formatında (liste, kod bloğu vb.) olabilir.`
+      `Yanıtların doğal, akıcı ve gerektiğinde markdown formatında olabilir.`
     ];
-
     if (memoryContext.length > 0) {
-      lines.push('\n## Uzun Süreli Hafıza (kullanıcı geçmişte şunları hatırlamanı istedi):');
-      for (const m of memoryContext) {
-        lines.push(`- ${m.key}: ${m.value}`);
-      }
+      lines.push('\n## Uzun Süreli Hafıza:');
+      for (const m of memoryContext) lines.push(`- ${m.key}: ${m.value}`);
     }
-
     if (notesContext.length > 0) {
       lines.push('\n## İlgili Notlar:');
-      for (const n of notesContext.slice(0, 3)) {
+      for (const n of notesContext.slice(0, 3))
         lines.push(`- [${n.category}] ${n.title}: ${n.content.slice(0, 200)}`);
-      }
     }
-
     return lines.join('\n');
   }
 
   async chat({ systemPrompt, history = [], userMessage }) {
-    // Kurucu sorusu mu? — doğrudan cevapla
     if (this.isCreatorQuestion(userMessage)) {
       return 'Kurucum Sadık. O beni tasarladı, kodladı ve hayata geçirdi.';
     }
-
     const messages = [
       { role: 'system', content: systemPrompt },
       ...history.map(h => ({ role: h.role, content: h.content })),
       { role: 'user', content: userMessage }
     ];
-
     try {
       switch (this.provider) {
         case 'openai':    return await this.callOpenAI(messages);
         case 'anthropic': return await this.callAnthropic(messages);
+        case 'groq':      return await this.callGroq(messages);
         case 'ollama':    return await this.callOllama(messages);
         default:          return this.mockResponse(userMessage);
       }
@@ -95,6 +88,26 @@ class AIProvider {
       console.error(`[AIProvider:${this.provider}] hata:`, err.message);
       return this.mockResponse(userMessage, err.message);
     }
+  }
+
+  async callGroq(messages) {
+    if (!this.groq.apiKey) throw new Error('GROQ_API_KEY tanımsız');
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.groq.apiKey}`
+      },
+      body: JSON.stringify({
+        model: this.groq.model,
+        messages,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens
+      })
+    });
+    if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || '(boş yanıt)';
   }
 
   async callOpenAI(messages) {
@@ -121,7 +134,6 @@ class AIProvider {
     if (!this.anthropic.apiKey) throw new Error('ANTHROPIC_API_KEY tanımsız');
     const system = messages.find(m => m.role === 'system')?.content || '';
     const rest = messages.filter(m => m.role !== 'system');
-
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -150,10 +162,7 @@ class AIProvider {
         model: this.ollama.model,
         messages,
         stream: false,
-        options: {
-          temperature: this.temperature,
-          num_predict: this.maxTokens
-        }
+        options: { temperature: this.temperature, num_predict: this.maxTokens }
       })
     });
     if (!res.ok) throw new Error(`Ollama ${res.status}`);
@@ -162,13 +171,8 @@ class AIProvider {
   }
 
   mockResponse(userMessage, errorNote) {
-    const samples = [
-      `Sistemler aktif. Mesajını aldım: "${userMessage}". Şu an mock modda çalışıyorum — .env dosyasındaki AI_PROVIDER ve API anahtarını ayarladığında gerçek yanıtlar üretirim.`,
-      `Anlaşıldı. "${userMessage}" üzerine düşünüyorum. (Bu cevap mock sağlayıcıdan geliyor; tam zekayı açmak için bir LLM bağla.)`,
-      `Komutun alındı: "${userMessage}". Mock motorum çalışıyor; OpenAI/Anthropic/Ollama bağladığında çok daha derin yanıtlar veririm.`
-    ];
-    const base = samples[Math.floor(Math.random() * samples.length)];
-    return errorNote ? `${base}\n\n_Not: Gerçek sağlayıcıya bağlanılamadı — ${errorNote}_` : base;
+    const base = `Sistemler aktif. Mesajını aldım: "${userMessage}". Şu an mock modda çalışıyorum — .env dosyasındaki AI_PROVIDER ve API anahtarını ayarladığında gerçek yanıtlar üretirim.`;
+    return errorNote ? `${base}\n\nHata: ${errorNote}` : base;
   }
 }
 
