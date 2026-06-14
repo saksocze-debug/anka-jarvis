@@ -107,10 +107,16 @@ app.post('/api/chat', async (req, res) => {
     let { conversationId, message } = req.body || {};
     if (!message?.trim()) return res.status(400).json({ error: 'Mesaj boş olamaz.' });
 
-    if (!conversationId) {
-      const c = memory.createConversation(message.slice(0, 40));
-      conversationId = c.id;
-    }
+   if (!conversationId) {
+  const c = memory.createConversation(message.slice(0, 40));
+  conversationId = c.id;
+} else {
+  const convs = memory.listConversations();
+  if (!convs.find(c => c.id === conversationId)) {
+    const c = memory.createConversation(message.slice(0, 40));
+    conversationId = c.id;
+  }
+}
 
     if (parser.isCommand(message)) {
       const result = await parser.handle(message, { conversationId });
