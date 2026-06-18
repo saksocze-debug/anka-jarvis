@@ -1,437 +1,658 @@
-// ANKA script.js — Türkçe, kalın erkek sesi, hologram efektleri
-const API = '/api';
-const socket = io();
+/* ═══ ANKA script.js v3 ═══
+   - Mobil + masaüstü ses tanıma (düzeltilmiş)
+   - PC: erkek ses, Telefon: kadın ses (otomatik)
+   - CSS bar görselleştirici (canvas yok, mobil uyumlu)
+   - Dünya hologramı tıklama efektleri
+   - YouTube arama desteği
+*/
 
-const S = {
-  convId: null,
-  settings: { ai_name:'ANKA', personality:'Güler Yüzlü' },
-  rate: 0.88,
-  pitch: 0.75,
+'use strict';
+
+// ─── State ───────────────────────────────────────────────
+const ST = {
+  convId:      null,
+  settings:    {},
+  rate:        0.88,
+  pitch:       0.78,
   recognizing: false,
-  voices: [],
-  animId: null,
-  botAnimId: null,
-  audioCtx: null,
-  analyser: null,
-  micStream: null,
-  dataArr: null
+  speaking:    false,
+  voices:      [],
+  voiceModel:  'auto',   // auto | tr-male | tr-female | en-male | en-female
+  barAnim:     null,
+  barPhase:    0,
+  isMobile:    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 };
 
-// ─── Yardımcılar ───────────────────────────────────────
-const $ = s => document.querySelector(s);
+// ─── DOM ─────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
 const ts = () => new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-async function api(path, opts={}) {
-  const r = await fetch(API+path, {
-    headers:{'Content-Type':'application/json'},
+// ─── API ─────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  if (!r.ok) throw new Error((await r.json()).error || r.statusText);
-  return r.json();
+  if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+  return res.json();
 }
 
-// ─── Saat ──────────────────────────────────────────────
-function tick() {
+// ─── Saat ────────────────────────────────────────────────
+function tickClock() {
   const n = new Date();
-  $('#clock-time').textContent = n.toLocaleTimeString('tr-TR');
-  $('#clock-date').textContent = n.toLocaleDateString('tr-TR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
+  $('clock-time').textContent = n.toLocaleTimeString('tr-TR');
+  $('clock-date').textContent = n.toLocaleDateString('tr-TR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
 }
-setInterval(tick,1000); tick();
+setInterval(tickClock, 1000);
+tickClock();
 
-// ─── Nav ───────────────────────────────────────────────
-document.querySelectorAll('.nav-btn').forEach(b => {
+// ─── Nav ─────────────────────────────────────────────────
+$$('.ni').forEach(b => {
   b.addEventListener('click', () => {
-    document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    $$('.ni').forEach(x => x.classList.remove('active'));
+    $$('.view').forEach(x => x.classList.remove('active'));
     b.classList.add('active');
-    const v = b.dataset.view;
-    $(`#view-${v}`).classList.add('active');
-    if (v==='notes') loadNotes();
-    if (v==='settings') loadSettings();
+    document.getElementById('view-' + b.dataset.v).classList.add('active');
   });
 });
 
-// ─── Parçacıklar ───────────────────────────────────────
-function spawnParticles(n=6) {
-  const c = $('#particles');
-  for (let i=0;i<n;i++) {
-    const p = document.createElement('div');
-    p.className='ptcl';
-    const sz = Math.random()*7+3;
-    const blue = Math.random()>.45;
-    p.style.cssText=`width:${sz}px;height:${sz}px;left:${25+Math.random()*50}%;bottom:${20+Math.random()*30}%;background:${blue?'#00d4ff':'#ff6600'};box-shadow:0 0 ${sz*2}px ${blue?'#00d4ff':'#ff6600'};--d:${.7+Math.random()*1.1}s;animation-delay:${Math.random()*.4}s`;
-    c.appendChild(p);
-    setTimeout(()=>p.remove(),2000);
+// ─── Parçacıklar ─────────────────────────────────────────
+function spawnParticles(n = 8) {
+  const wrap = $('ptcl-wrap');
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.className = 'pt';
+    const sz  = (Math.random() * 6 + 3).toFixed(1);
+    const blu = Math.random() > 0.45;
+    const clr = blu ? '#00d4ff' : '#ff6600';
+    el.style.cssText = `
+      width:${sz}px;height:${sz}px;
+      left:${20 + Math.random() * 60}%;
+      bottom:${15 + Math.random() * 40}%;
+      background:${clr};
+      box-shadow:0 0 ${parseFloat(sz)*2}px ${clr};
+      --d:${(0.6 + Math.random() * 1).toFixed(2)}s;
+      animation-delay:${(Math.random() * 0.3).toFixed(2)}s
+    `;
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
   }
 }
-setInterval(()=>spawnParticles(4),700);
+setInterval(() => spawnParticles(3), 900);
 
-// ─── Hologram tıklama efekti ───────────────────────────
-const phoenixWrap = $('#phoenix-wrap');
-phoenixWrap.addEventListener('click', () => {
-  // Efekt burst
-  phoenixWrap.classList.add('clicked');
-  spawnParticles(20);
-  // Özel ses efekti (Web Audio)
-  playClickSound();
-  // "Dinliyorum" efekti + mikrofon başlat
-  setTimeout(()=>phoenixWrap.classList.remove('clicked'),800);
-  if (!S.recognizing) startMic();
+// ─── Hologram tıklama ────────────────────────────────────
+const globeWrap = $('globe-wrap');
+
+globeWrap.addEventListener('click', handleGlobeClick);
+globeWrap.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    handleGlobeClick();
+  }
 });
 
-function playClickSound() {
+function handleGlobeClick() {
+  // Burst efekti
+  globeWrap.classList.remove('bursting');
+  void globeWrap.offsetWidth; // reflow
+  globeWrap.classList.add('bursting');
+  setTimeout(() => globeWrap.classList.remove('bursting'), 1100);
+
+  // Parçacıklar
+  spawnParticles(18);
+
+  // Ses efekti
+  playSonicClick();
+
+  // Mikrofonu başlat
+  if (!ST.recognizing) {
+    startMic();
+  } else {
+    stopMic();
+  }
+}
+
+function playSonicClick() {
   try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type='sine';
-    osc.frequency.setValueAtTime(440,ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880,ctx.currentTime+.1);
-    osc.frequency.exponentialRampToValueAtTime(220,ctx.currentTime+.3);
-    gain.gain.setValueAtTime(.3,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(320, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.32);
+    gain.gain.setValueAtTime(0.28, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime+.4);
-    setTimeout(()=>ctx.close(),500);
-  } catch(e){}
+    osc.stop(ctx.currentTime + 0.4);
+    setTimeout(() => ctx.close(), 600);
+  } catch (_) {}
 }
 
-// ─── Ses görselleştiricisi ─────────────────────────────
-async function startVisualizer() {
-  try {
-    S.micStream = await navigator.mediaDevices.getUserMedia({audio:true});
-    S.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const src = S.audioCtx.createMediaStreamSource(S.micStream);
-    S.analyser = S.audioCtx.createAnalyser();
-    S.analyser.fftSize = 64;
-    src.connect(S.analyser);
-    S.dataArr = new Uint8Array(S.analyser.frequencyBinCount);
-  } catch(e) { S.analyser = null; }
-  $('#bottom-vis').classList.add('show');
-  drawBottom();
-}
+// ─── CSS Bar Görselleştirici (Canvas yok, mobil uyumlu) ──
+const BAR_COUNT = 28;
+let bars = [];
 
-function stopVisualizer() {
-  if (S.botAnimId) cancelAnimationFrame(S.botAnimId);
-  if (S.micStream) S.micStream.getTracks().forEach(t=>t.stop());
-  if (S.audioCtx) S.audioCtx.close();
-  S.audioCtx=null; S.analyser=null; S.micStream=null;
-  $('#bottom-vis').classList.remove('show');
-  const c=$('#vis-canvas');
-  c.getContext('2d').clearRect(0,0,c.width,c.height);
-}
-
-function drawBottom() {
-  const canvas=$('#vis-canvas');
-  const ctx=canvas.getContext('2d');
-  const W=canvas.width, H=canvas.height;
-  let phase=0;
-
-  function draw() {
-    S.botAnimId=requestAnimationFrame(draw);
-    let bars;
-    if (S.analyser) {
-      S.analyser.getByteFrequencyData(S.dataArr);
-      bars=Array.from(S.dataArr.slice(0,36));
-    } else {
-      bars=Array.from({length:36},(_,i)=>Math.abs(Math.sin((i+phase)*.38))*180+Math.random()*50);
-    }
-    phase+=.12;
-    ctx.clearRect(0,0,W,H);
-    ctx.fillStyle='rgba(0,3,10,0.5)';
-    ctx.fillRect(0,0,W,H);
-    // Izgara
-    ctx.strokeStyle='rgba(0,212,255,0.06)';
-    ctx.lineWidth=.5;
-    for(let x=0;x<W;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-    for(let y=0;y<H;y+=17){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
-    // Barlar
-    const bw=W/bars.length;
-    bars.forEach((v,i)=>{
-      const h=(v/255)*(H*.82);
-      const cx=i*bw+bw/2;
-      const g=ctx.createLinearGradient(0,H/2-h/2,0,H/2+h/2);
-      g.addColorStop(0,'rgba(0,212,255,.9)');
-      g.addColorStop(.5,'rgba(255,102,0,.75)');
-      g.addColorStop(1,'rgba(0,212,255,.9)');
-      ctx.fillStyle=g;
-      ctx.shadowBlur=8; ctx.shadowColor='#00d4ff';
-      ctx.fillRect(cx-bw*.28,H/2-h/2,bw*.56,h);
-    });
-    ctx.shadowBlur=0;
-    // Merkez çizgi
-    ctx.strokeStyle='rgba(0,212,255,0.2)';
-    ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+function initBars() {
+  const wrap = $('vis-bars');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  bars = [];
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const b = document.createElement('div');
+    b.className = 'vbar';
+    b.style.height = '3px';
+    wrap.appendChild(b);
+    bars.push(b);
   }
-  draw();
+}
+initBars();
+
+function animateBars() {
+  if (!$('vis-wrap').classList.contains('show')) {
+    ST.barAnim = requestAnimationFrame(animateBars);
+    return;
+  }
+  ST.barPhase += 0.15;
+  const p = ST.barPhase;
+  bars.forEach((b, i) => {
+    const h = Math.abs(Math.sin((i * 0.35) + p)) * 34
+            + Math.abs(Math.sin((i * 0.18) + p * 1.3)) * 14
+            + Math.random() * 6;
+    b.style.height = Math.max(2, Math.min(44, h)).toFixed(0) + 'px';
+    const ratio = h / 44;
+    const r  = Math.round(255 * (1 - ratio) + 0  * ratio);
+    const g  = Math.round(100 * (1 - ratio) + 212 * ratio);
+    const bv = Math.round(0   * (1 - ratio) + 255 * ratio);
+    b.style.background = `rgb(${r},${g},${bv})`;
+    b.style.boxShadow  = `0 0 5px rgb(${r},${g},${bv})`;
+  });
+  ST.barAnim = requestAnimationFrame(animateBars);
 }
 
-// ─── Durum güncelleyici ────────────────────────────────
-function setState(text, active=false) {
-  const el=$('#state-text');
-  el.textContent=text;
-  el.classList.toggle('active',active);
+function showVisualizer() {
+  $('vis-wrap').classList.add('show');
+  if (!ST.barAnim) animateBars();
+}
+function hideVisualizer() {
+  $('vis-wrap').classList.remove('show');
 }
 
-// ─── TTS — Kalın erkek sesi ────────────────────────────
+// ─── Durum metni ─────────────────────────────────────────
+function setStatus(txt, active = false) {
+  const el = $('globe-status');
+  el.textContent = txt;
+  el.classList.toggle('active', active);
+}
+
+// ─── TTS — Ses Seçimi ────────────────────────────────────
 function loadVoices() {
-  S.voices = speechSynthesis.getVoices();
-}
-if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged=loadVoices;
-  setTimeout(loadVoices,600);
+  const vs = window.speechSynthesis.getVoices();
+  if (vs.length) ST.voices = vs;
 }
 
-function getMaleVoice() {
-  // Önce Türkçe erkek sesini ara
-  const trMaleKW=['erkek','male','man','david','mark','türkçe'];
-  const trVoices=S.voices.filter(v=>v.lang.startsWith('tr'));
-  if (trVoices.length) {
-    const m=trVoices.find(v=>trMaleKW.some(k=>v.name.toLowerCase().includes(k)));
-    if (m) return m;
-    // Türkçe ses var ama erkek bulunamadı — ilkini al
-    return trVoices[0];
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+  setTimeout(loadVoices, 300);
+  setTimeout(loadVoices, 1000);
+  setTimeout(loadVoices, 2500);
+}
+
+function selectVoice() {
+  const voices = ST.voices;
+  if (!voices.length) return null;
+
+  const model = ST.voiceModel;
+
+  // Otomatik: PC → erkek, Mobil → kadın
+  if (model === 'auto') {
+    return ST.isMobile ? findVoice('tr', 'female') || findVoice('tr', null)
+                       : findVoice('tr', 'male')   || findVoice('tr', null);
   }
-  // Türkçe yoksa İngilizce erkek
-  const enVoices=S.voices.filter(v=>v.lang.startsWith('en'));
-  const enMale=enVoices.find(v=>['male','man','david','mark','james','paul','george'].some(k=>v.name.toLowerCase().includes(k)));
-  if (enMale) return enMale;
-  return S.voices[0]||null;
+
+  const [lang, gender] = model.split('-'); // 'tr','male' gibi
+  return findVoice(lang, gender) || null;
+}
+
+function findVoice(lang, gender) {
+  const voices = ST.voices;
+  const MALE_KW   = ['male','man','david','mark','james','paul','george','erkek'];
+  const FEMALE_KW = ['female','woman','girl','zira','susan','eva','hazel','karen','kadın'];
+
+  // Dil eşleşmesi
+  const langMap = { tr: 'tr', en: 'en' };
+  const prefix  = langMap[lang] || lang;
+  let pool = voices.filter(v => v.lang.toLowerCase().startsWith(prefix));
+  if (!pool.length) pool = voices; // fallback: hepsi
+
+  if (gender === 'male') {
+    const m = pool.find(v => MALE_KW.some(k => v.name.toLowerCase().includes(k)));
+    if (m) return m;
+    // Son çare: dişi anahtar kelimesi olmayan ilk ses
+    return pool.find(v => !FEMALE_KW.some(k => v.name.toLowerCase().includes(k))) || pool[0];
+  }
+  if (gender === 'female') {
+    const f = pool.find(v => FEMALE_KW.some(k => v.name.toLowerCase().includes(k)));
+    if (f) return f;
+    return pool[pool.length - 1] || null;
+  }
+  return pool[0] || null;
 }
 
 function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
-  const v=getMaleVoice();
-  if (v) u.voice=v;
-  u.lang='tr-TR';
-  u.rate=S.rate;
-  u.pitch=S.pitch; // 0.75 = kalın erkek sesi
-  u.volume=1;
-  speechSynthesis.speak(u);
+  if (!('speechSynthesis' in window) || !text) return;
+
+  // Önceki konuşmayı durdur
+  window.speechSynthesis.cancel();
+
+  // Kısa gecikme — özellikle mobilde cancel'dan hemen sonra speak çalışmayabiliyor
+  setTimeout(() => {
+    const utt  = new SpeechSynthesisUtterance(text);
+    const voice = selectVoice();
+    if (voice) utt.voice = voice;
+    utt.lang   = 'tr-TR';
+    utt.rate   = ST.rate;
+    utt.pitch  = ST.pitch;
+    utt.volume = 1.0;
+
+    utt.onstart = () => {
+      ST.speaking = true;
+      setStatus('Konuşuyor…');
+    };
+    utt.onend = () => {
+      ST.speaking = false;
+      setStatus('Hazır');
+    };
+    utt.onerror = () => {
+      ST.speaking = false;
+      setStatus('Hazır');
+    };
+
+    // iOS Safari fix: kısa sessizlik ekleme
+    if (/iPhone|iPad/i.test(navigator.userAgent)) {
+      const silence = new SpeechSynthesisUtterance(' ');
+      silence.volume = 0;
+      window.speechSynthesis.speak(silence);
+    }
+
+    window.speechSynthesis.speak(utt);
+
+    // iOS 'ölü konuşma' hatası için keepalive
+    const keepAlive = setInterval(() => {
+      if (!window.speechSynthesis.speaking) { clearInterval(keepAlive); return; }
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }, 10000);
+    utt.onend   = () => { clearInterval(keepAlive); ST.speaking = false; setStatus('Hazır'); };
+    utt.onerror = () => { clearInterval(keepAlive); ST.speaking = false; setStatus('Hazır'); };
+  }, 80);
 }
 
-// ─── YouTube açma ──────────────────────────────────────
-function handleYouTube(message) {
-  const patterns=[
-    /youtube(?:'?da|'?de|'?den)?\s+(.+?)\s+(?:aç|çal|oynat|göster)/i,
-    /(.+?)\s+(?:şarkısını?|videosunu?|klibini?)\s+(?:youtube'?da\s+)?(?:aç|çal|oynat)/i,
-    /(.+?)\s+(?:aç|çal)\s+youtube/i
+// ─── Speech Recognition ──────────────────────────────────
+let SREngine = null;
+
+function buildRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+
+  const r = new SR();
+  r.lang = 'tr-TR';
+  r.continuous = false;
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+
+  r.onstart = () => {
+    ST.recognizing = true;
+    $('mic-btn').classList.add('on');
+    globeWrap.classList.add('listening');
+    setStatus('Dinliyorum…', true);
+    showVisualizer();
+    $('status-lbl').textContent = 'DİNLİYOR';
+  };
+
+  r.onresult = e => {
+    const text = e.results[0]?.[0]?.transcript?.trim();
+    if (text) {
+      $('chat-in').value = text;
+      sendMessage(text);
+    }
+  };
+
+  r.onerror = e => {
+    console.warn('[SR] hata:', e.error);
+    stopListeningUI();
+    if (e.error === 'not-allowed') {
+      setStatus('Mikrofon izni gerekli');
+    } else if (e.error === 'no-speech') {
+      setStatus('Ses algılanamadı');
+    } else {
+      setStatus('Hazır');
+    }
+  };
+
+  r.onend = () => {
+    // onresult'tan sonra da tetiklenir — sadece UI'ı kapat
+    stopListeningUI();
+  };
+
+  return r;
+}
+
+function stopListeningUI() {
+  ST.recognizing = false;
+  $('mic-btn').classList.remove('on');
+  globeWrap.classList.remove('listening');
+  hideVisualizer();
+  $('status-lbl').textContent = 'AKTİF';
+  if (!ST.speaking) setStatus('Hazır');
+}
+
+function startMic() {
+  // TTS konuşuyorsa durdur
+  if (ST.speaking) {
+    window.speechSynthesis.cancel();
+    ST.speaking = false;
+  }
+
+  // Her seferinde taze bir recognition nesnesi oluştur (mobil uyumluluğu için)
+  SREngine = buildRecognition();
+
+  if (!SREngine) {
+    alert('Tarayıcınız sesli komut desteklemiyor. Lütfen Chrome kullanın.');
+    return;
+  }
+
+  try {
+    SREngine.start();
+  } catch (e) {
+    console.warn('[SR] start hatası:', e.message);
+    stopListeningUI();
+  }
+}
+
+function stopMic() {
+  if (SREngine) {
+    try { SREngine.stop(); } catch (_) {}
+    SREngine = null;
+  }
+  stopListeningUI();
+}
+
+$('mic-btn').addEventListener('click', () => {
+  if (ST.recognizing) stopMic();
+  else startMic();
+});
+
+// ─── YouTube ─────────────────────────────────────────────
+function handleYouTube(text) {
+  const pats = [
+    /youtube(?:'?[dD][aA]|'?[dD][eE])?\s+(.+?)\s*(?:aç|çal|oynat|göster|bul)/i,
+    /(.+?)\s+(?:şarkısını?|klibini?|videosunu?)\s+(?:youtube'?(?:[dD][aA]|[dD][eE])?\s*)?(?:aç|çal|oynat)/i,
+    /(.+?)\s+(?:aç|çal|oynat)\s+youtube/i,
+    /youtube'?[dD][aA]\s+(.+?)\s+(?:aç|ara|bul|oynat)/i
   ];
-  for (const p of patterns) {
-    const m=message.match(p);
+  for (const p of pats) {
+    const m = text.match(p);
     if (m) {
-      const q=encodeURIComponent(m[1].trim());
-      const url=`https://www.youtube.com/results?search_query=${q}`;
-      window.open(url,'_blank');
-      return `"${m[1].trim()}" için YouTube'da arama açıldı! 🎵`;
+      const q   = m[1].trim();
+      const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+      window.open(url, '_blank');
+      return `"${q}" için YouTube'da arama açıldı! 🎵`;
     }
   }
-  // Genel "youtube aç" veya link içeriyorsa
-  if (/youtube/i.test(message)) {
-    const q=message.replace(/youtube[^\w]*/i,'').replace(/aç|çal|oynat|göster/gi,'').trim();
-    if (q.length>1) {
-      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,'_blank');
+  if (/youtube/i.test(text)) {
+    const q = text.replace(/youtube[^\w]*/i,'').replace(/aç|çal|oynat|göster|bul/gi,'').trim();
+    if (q.length > 1) {
+      window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(q), '_blank');
       return `"${q}" YouTube'da aranıyor! 🎵`;
     }
-    window.open('https://www.youtube.com','_blank');
+    window.open('https://www.youtube.com', '_blank');
     return 'YouTube açıldı!';
   }
   return null;
 }
 
-// ─── Chat ──────────────────────────────────────────────
-const msgs=$('#messages');
-const input=$('#chat-input');
+// ─── Chat ─────────────────────────────────────────────────
+const msgBox   = $('messages');
+const chatInput = $('chat-in');
 
-function addMsg(role,content) {
-  const d=document.createElement('div');
-  d.className=`msg ${role==='user'?'user':'bot'}`;
-  d.innerHTML=`<div>${esc(content)}</div><div class="ts">${ts()}</div>`;
-  msgs.appendChild(d);
-  msgs.scrollTop=msgs.scrollHeight;
-  return d;
+function addMsg(role, content) {
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  const text = document.createElement('div');
+  text.textContent = content;
+  const time = document.createElement('span');
+  time.className = 'msg-ts';
+  time.textContent = ts();
+  el.appendChild(text);
+  el.appendChild(time);
+  msgBox.appendChild(el);
+  msgBox.scrollTop = msgBox.scrollHeight;
+  return el;
 }
 
 function addTyping() {
-  const d=document.createElement('div');
-  d.className='msg bot';
-  d.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';
-  msgs.appendChild(d);
-  msgs.scrollTop=msgs.scrollHeight;
-  return d;
+  const el = document.createElement('div');
+  el.className = 'msg bot typing-msg';
+  el.innerHTML = '<span></span><span></span><span></span>';
+  msgBox.appendChild(el);
+  msgBox.scrollTop = msgBox.scrollHeight;
+  return el;
 }
 
-async function send() {
-  const text=input.value.trim();
+async function sendMessage(text) {
+  text = (text || chatInput.value).trim();
   if (!text) return;
-  input.value='';
-  addMsg('user',text);
-  setState('Düşünüyor...',true);
+  chatInput.value = '';
+  addMsg('user', text);
+  setStatus('Düşünüyor…', true);
 
   // YouTube kontrolü
-  const ytReply=handleYouTube(text);
+  const ytReply = handleYouTube(text);
   if (ytReply) {
-    setTimeout(()=>{
-      addMsg('bot',ytReply);
-      speak(ytReply);
-      setState('Hazır');
-    },300);
+    addMsg('bot', ytReply);
+    speak(ytReply);
+    setStatus('Hazır');
     return;
   }
 
-  const typing=addTyping();
+  const typing = addTyping();
+
   try {
-    const data=await api('/chat',{method:'POST',body:{conversationId:S.convId,message:text}});
-    S.convId=data.conversationId;
+    const data = await api('/chat', {
+      method: 'POST',
+      body:   { conversationId: ST.convId, message: text }
+    });
+    ST.convId = data.conversationId;
     typing.remove();
-    addMsg('bot',data.reply);
+    addMsg('bot', data.reply);
     speak(data.reply);
-    setState('Hazır');
-  } catch(e) {
+    setStatus('Hazır');
+  } catch (e) {
     typing.remove();
-    const err=`Bağlantı hatası: ${e.message}`;
-    addMsg('bot',err);
-    setState('Hata',false);
+    const err = `Hata: ${e.message}`;
+    addMsg('err', err);
+    setStatus('Bağlantı hatası');
+    setTimeout(() => setStatus('Hazır'), 3000);
   }
 }
 
-$('#send-btn').addEventListener('click',send);
-input.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
-
-// ─── Mikrofon / Sesli komut ────────────────────────────
-const micBtn=$('#mic-btn');
-let recognition=null;
-
-if ('webkitSpeechRecognition' in window||'SpeechRecognition' in window) {
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  recognition=new SR();
-  recognition.lang='tr-TR';
-  recognition.continuous=false;
-  recognition.interimResults=false;
-
-  recognition.onstart=()=>{
-    S.recognizing=true;
-    micBtn.classList.add('on');
-    phoenixWrap.classList.add('listening','active');
-    setState('Dinliyorum...',true);
-    startVisualizer();
-    spawnParticles(12);
-  };
-  recognition.onend=()=>{
-    S.recognizing=false;
-    micBtn.classList.remove('on');
-    phoenixWrap.classList.remove('listening','active');
-    setState('Hazır');
-    stopVisualizer();
-  };
-  recognition.onerror=e=>{
-    S.recognizing=false;
-    micBtn.classList.remove('on');
-    phoenixWrap.classList.remove('listening','active');
-    setState('Mikrofon hatası: '+e.error);
-    stopVisualizer();
-  };
-  recognition.onresult=e=>{
-    const t=e.results[0][0].transcript;
-    input.value=t;
-    send();
-  };
-}
-
-function startMic() {
-  if (!recognition) { alert('Tarayıcınız sesli komutu desteklemiyor.'); return; }
-  if (S.recognizing) { recognition.stop(); return; }
-  recognition.start();
-}
-
-micBtn.addEventListener('click',startMic);
-
-// ─── Ayarlar ───────────────────────────────────────────
-function loadSettings() {
-  $('#set-name').value=S.settings.ai_name||'ANKA';
-  $('#voice-rate').value=S.rate;
-  $('#rate-label').textContent=`Hız: ${S.rate}x`;
-  $('#voice-pitch').value=S.pitch;
-  $('#pitch-label').textContent=`Ton: ${S.pitch}x (Kalın erkek sesi)`;
-  document.querySelectorAll('.pers-btn').forEach(b=>{
-    b.classList.toggle('active',b.dataset.v===S.settings.personality);
-  });
-}
-
-document.querySelectorAll('.pers-btn').forEach(b=>{
-  b.addEventListener('click',()=>{
-    document.querySelectorAll('.pers-btn').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-  });
+$('send-btn').addEventListener('click', () => sendMessage());
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
 });
 
-$('#voice-rate').addEventListener('input',e=>{
-  S.rate=parseFloat(e.target.value);
-  $('#rate-label').textContent=`Hız: ${S.rate.toFixed(2)}x`;
-});
-$('#voice-pitch').addEventListener('input',e=>{
-  S.pitch=parseFloat(e.target.value);
-  $('#pitch-label').textContent=`Ton: ${S.pitch.toFixed(2)}x (${S.pitch<0.85?'Kalın erkek sesi':'Normal'})`;
-});
+// ─── Notlar ──────────────────────────────────────────────
+let noteEditId = null;
 
-$('#save-settings').addEventListener('click',()=>{
-  const name=$('#set-name').value.trim()||'ANKA';
-  const pers=document.querySelector('.pers-btn.active')?.dataset.v||'Güler Yüzlü';
-  S.settings={ai_name:name,personality:pers};
-  api('/settings',{method:'PUT',body:{ai_name:name,personality:pers,language:'tr'}})
-    .then(()=>setState('Ayarlar kaydedildi!',true))
-    .catch(()=>{});
-  setTimeout(()=>setState('Hazır'),2000);
-});
-
-$('#test-voice').addEventListener('click',()=>{
-  speak(`Merhaba! Ben ${S.settings.ai_name||'Anka'}. Size nasıl yardımcı olabilirim?`);
-});
-
-// ─── Notlar ────────────────────────────────────────────
 async function loadNotes() {
-  const s=$('#note-search').value.trim();
-  const list=await api('/notes'+(s?`?search=${encodeURIComponent(s)}`:''));
-  $('#notes-list').innerHTML=list.map(n=>`
-    <div class="note-card">
-      <button class="note-del" onclick="delNote(${n.id})">✕</button>
-      <h4>${esc(n.title)}</h4>
-      <p>${esc(n.content)}</p>
-    </div>
-  `).join('')||'<p style="color:var(--muted)">Henüz not yok.</p>';
+  const s     = ($('note-s')?.value || '').trim();
+  const list  = await api('/notes' + (s ? '?search=' + encodeURIComponent(s) : ''));
+  const wrap  = $('notes-list');
+  if (!wrap) return;
+  wrap.innerHTML = list.length
+    ? list.map(n => `
+        <div class="nc" data-id="${n.id}" style="border-top-color:${n.color||'#00d4ff'}">
+          <span class="ncat">${esc(n.category)}</span>
+          <h4>${esc(n.title)}</h4>
+          <p>${esc(n.content)}</p>
+          <div class="nc-act">
+            <button class="nc-btn del" onclick="delNote(${n.id})">✕ Sil</button>
+          </div>
+        </div>`).join('')
+    : '<p style="color:var(--mut);font-size:12px;padding:8px">Henüz not yok.</p>';
 }
 
-window.delNote=async id=>{
+window.delNote = async id => {
   if (!confirm('Silinsin mi?')) return;
-  await api(`/notes/${id}`,{method:'DELETE'});
+  await api(`/notes/${id}`, { method: 'DELETE' });
   loadNotes();
 };
 
-$('#note-new').addEventListener('click',async()=>{
-  const title=prompt('Başlık:'); if(!title) return;
-  const content=prompt('İçerik:'); if(!content) return;
-  await api('/notes',{method:'POST',body:{title,content,category:'Genel'}});
+function showNoteForm(show) {
+  const f = $('note-form');
+  if (f) f.hidden = !show;
+  if (show) { $('nf-title')?.focus(); }
+}
+
+$('note-add')?.addEventListener('click', () => {
+  noteEditId = null;
+  if ($('nf-title')) $('nf-title').value = '';
+  if ($('nf-body'))  $('nf-body').value  = '';
+  if ($('nf-cat'))   $('nf-cat').value   = 'Genel';
+  showNoteForm(true);
+});
+$('nf-cancel')?.addEventListener('click', () => showNoteForm(false));
+$('nf-save')?.addEventListener('click', async () => {
+  const title = $('nf-title')?.value.trim();
+  const body  = $('nf-body')?.value.trim();
+  if (!title || !body) { alert('Başlık ve içerik zorunlu.'); return; }
+  await api('/notes', {
+    method: 'POST',
+    body:   { title, content: body, category: $('nf-cat')?.value || 'Genel' }
+  });
+  showNoteForm(false);
   loadNotes();
 });
-$('#note-search').addEventListener('input',()=>loadNotes());
+$('note-s')?.addEventListener('input', () => loadNotes());
 
-// ─── Socket ────────────────────────────────────────────
-socket.on('connect',()=>{
-  socket.emit('device:register',{name:navigator.platform||'Web',type:'Web'});
+// ─── Ayarlar ─────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    ST.settings = await api('/settings');
+    if ($('s-name'))  $('s-name').value = ST.settings.ai_name || 'ANKA';
+    if ($('s-rate'))  { $('s-rate').value = ST.settings.voice_rate || '0.88'; $('rv').textContent = parseFloat($('s-rate').value).toFixed(2) + 'x'; }
+    if ($('s-pitch')) { $('s-pitch').value = ST.settings.voice_pitch || '0.78'; $('pv').textContent = parseFloat($('s-pitch').value).toFixed(2) + 'x'; }
+    ST.rate  = parseFloat(ST.settings.voice_rate  || '0.88');
+    ST.pitch = parseFloat(ST.settings.voice_pitch || '0.78');
+
+    $$('.pb').forEach(b => b.classList.toggle('active', b.dataset.p === ST.settings.personality));
+
+    const vm = ST.settings.voice_model || 'auto';
+    ST.voiceModel = vm;
+    $$('.vb').forEach(b => b.classList.toggle('active', b.dataset.vm === vm));
+  } catch (_) {}
+}
+
+$('s-rate')?.addEventListener('input', e => {
+  ST.rate = parseFloat(e.target.value);
+  if ($('rv')) $('rv').textContent = ST.rate.toFixed(2) + 'x';
 });
-setInterval(()=>socket.emit('device:heartbeat'),15000);
+$('s-pitch')?.addEventListener('input', e => {
+  ST.pitch = parseFloat(e.target.value);
+  if ($('pv')) $('pv').textContent = ST.pitch.toFixed(2) + 'x';
+});
 
-// ─── Başlangıç ─────────────────────────────────────────
-api('/settings').then(d=>{ S.settings=d; }).catch(()=>{});
-setState('Merhaba! Size nasıl yardımcı olabilirim?');
+$$('.pb').forEach(b => b.addEventListener('click', () => {
+  $$('.pb').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+}));
 
-// Başlangıçta karşılama sesi (kısa gecikmeyle)
-setTimeout(()=>{
-  speak(`Merhaba! Ben Anka. Emirlerinizi bekliyorum.`);
-},1500);
+$$('.vb').forEach(b => b.addEventListener('click', () => {
+  $$('.vb').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  ST.voiceModel = b.dataset.vm;
+}));
+
+$('test-v')?.addEventListener('click', () => {
+  speak(`Merhaba! Ben ${ST.settings.ai_name || 'ANKA'}. Emirlerinizi bekliyorum.`);
+});
+
+$('s-save')?.addEventListener('click', async () => {
+  const name  = $('s-name')?.value.trim() || 'ANKA';
+  const pers  = document.querySelector('.pb.active')?.dataset.p || 'Güler Yüzlü';
+  const vm    = document.querySelector('.vb.active')?.dataset.vm || 'auto';
+  ST.voiceModel = vm;
+  try {
+    ST.settings = await api('/settings', {
+      method: 'PUT',
+      body:   { ai_name: name, personality: pers, language: 'tr', voice_rate: String(ST.rate), voice_pitch: String(ST.pitch), voice_model: vm }
+    });
+    setStatus('Ayarlar kaydedildi!', true);
+    setTimeout(() => setStatus('Hazır'), 2200);
+  } catch (e) {
+    alert('Kayıt hatası: ' + e.message);
+  }
+});
+
+$('exp-btn')?.addEventListener('click', async () => {
+  try {
+    const data = await api('/memory/export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `anka-export-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert('Dışa aktarma hatası.'); }
+});
+
+$('clr-btn')?.addEventListener('click', async () => {
+  if (!confirm('Tüm uzun süreli hafıza silinecek. Emin misin?')) return;
+  await api('/memory', { method: 'DELETE' });
+  alert('Hafıza temizlendi.');
+});
+
+// ─── Socket ──────────────────────────────────────────────
+const socket = (typeof io !== 'undefined') ? io() : null;
+if (socket) {
+  socket.on('connect', () => {
+    socket.emit('device:register', {
+      name: navigator.platform || 'Web',
+      type: ST.isMobile ? 'Mobil' : 'Masaüstü'
+    });
+  });
+  setInterval(() => socket.emit('device:heartbeat'), 15000);
+}
+
+// ─── Yardımcı ────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Başlangıç ───────────────────────────────────────────
+loadSettings();
+loadNotes();
+
+// Karşılama mesajı (mobilde ses için kullanıcı etkileşimi gerekiyor, bu yüzden 2sn bekle)
+setTimeout(() => {
+  const name = ST.settings.ai_name || 'ANKA';
+  setStatus(`${name} hazır. Tıklayın veya yazın.`);
+  // Masaüstünde karşılama sesi, mobilde ilk etkileşime bırak
+  if (!ST.isMobile) {
+    speak(`Merhaba! Ben ${name}. Nasıl yardımcı olabilirim?`);
+  }
+}, 1200);
+
+// Bar animasyonu başlat (arka planda çalışır, yalnızca vis gösterilince güncellenir)
+animateBars();
