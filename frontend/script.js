@@ -1,594 +1,437 @@
-// script.js — ANKA AI OS frontend
+// ANKA script.js — Türkçe, kalın erkek sesi, hologram efektleri
 const API = '/api';
 const socket = io();
 
-const state = {
-  conversationId: null,
-  settings: {},
+const S = {
+  convId: null,
+  settings: { ai_name:'ANKA', personality:'Güler Yüzlü' },
+  rate: 0.88,
+  pitch: 0.75,
   recognizing: false,
-  selectedVoice: null,
-  voiceRate: 1.0,
-  voicePitch: 1.0,
-  availableVoices: [],
-  animFrame: null,
-  bottomAnimFrame: null
+  voices: [],
+  animId: null,
+  botAnimId: null,
+  audioCtx: null,
+  analyser: null,
+  micStream: null,
+  dataArr: null
 };
 
-// ============= Utility ===================
-const $  = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+// ─── Yardımcılar ───────────────────────────────────────
+const $ = s => document.querySelector(s);
+const ts = () => new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-async function api(path, opts = {}) {
-  const res = await fetch(API + path, {
-    headers: { 'Content-Type': 'application/json' },
+async function api(path, opts={}) {
+  const r = await fetch(API+path, {
+    headers:{'Content-Type':'application/json'},
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-  return res.json();
+  if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+  return r.json();
 }
 
-function fmtTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+// ─── Saat ──────────────────────────────────────────────
+function tick() {
+  const n = new Date();
+  $('#clock-time').textContent = n.toLocaleTimeString('tr-TR');
+  $('#clock-date').textContent = n.toLocaleDateString('tr-TR',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
 }
+setInterval(tick,1000); tick();
 
-// ============= Clock ====================
-function tickClock() {
-  const now = new Date();
-  $('#clock-time').textContent = now.toLocaleTimeString('tr-TR');
-  $('#clock-date').textContent = now.toLocaleDateString('tr-TR', {
-    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
-  }).toUpperCase();
-}
-setInterval(tickClock, 1000); tickClock();
-
-// ============= Navigation ===============
-$$('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    $$('.nav-btn').forEach(b => b.classList.remove('active'));
-    $$('.view').forEach(v => v.classList.remove('active'));
-    btn.classList.add('active');
-    const target = btn.dataset.view;
-    $(`#view-${target}`).classList.add('active');
-    if (target === 'devices') loadDevices();
-    if (target === 'notes') loadNotes();
-    if (target === 'settings') loadSettings();
+// ─── Nav ───────────────────────────────────────────────
+document.querySelectorAll('.nav-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const v = b.dataset.view;
+    $(`#view-${v}`).classList.add('active');
+    if (v==='notes') loadNotes();
+    if (v==='settings') loadSettings();
   });
 });
 
-// ============= Fire Particles ===================
-function spawnParticles(count = 8) {
-  const container = $('#fire-particles');
-  for (let i = 0; i < count; i++) {
+// ─── Parçacıklar ───────────────────────────────────────
+function spawnParticles(n=6) {
+  const c = $('#particles');
+  for (let i=0;i<n;i++) {
     const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 6 + 3;
-    const isBlue = Math.random() > 0.5;
-    p.style.cssText = `
-      width:${size}px; height:${size}px;
-      left:${30 + Math.random() * 40}%;
-      background:${isBlue ? '#00e0ff' : '#ff6600'};
-      box-shadow: 0 0 ${size*2}px ${isBlue ? '#00e0ff' : '#ff6600'};
-      --dur:${0.8 + Math.random() * 1.2}s;
-      animation-delay:${Math.random() * 0.5}s;
-    `;
-    container.appendChild(p);
-    setTimeout(() => p.remove(), 2000);
+    p.className='ptcl';
+    const sz = Math.random()*7+3;
+    const blue = Math.random()>.45;
+    p.style.cssText=`width:${sz}px;height:${sz}px;left:${25+Math.random()*50}%;bottom:${20+Math.random()*30}%;background:${blue?'#00d4ff':'#ff6600'};box-shadow:0 0 ${sz*2}px ${blue?'#00d4ff':'#ff6600'};--d:${.7+Math.random()*1.1}s;animation-delay:${Math.random()*.4}s`;
+    c.appendChild(p);
+    setTimeout(()=>p.remove(),2000);
   }
 }
-setInterval(() => spawnParticles(5), 600);
+setInterval(()=>spawnParticles(4),700);
 
-// ============= Audio Visualizer (dinleme) ===================
-let audioCtx, analyser, micStream, dataArray;
+// ─── Hologram tıklama efekti ───────────────────────────
+const phoenixWrap = $('#phoenix-wrap');
+phoenixWrap.addEventListener('click', () => {
+  // Efekt burst
+  phoenixWrap.classList.add('clicked');
+  spawnParticles(20);
+  // Özel ses efekti (Web Audio)
+  playClickSound();
+  // "Dinliyorum" efekti + mikrofon başlat
+  setTimeout(()=>phoenixWrap.classList.remove('clicked'),800);
+  if (!S.recognizing) startMic();
+});
 
-async function startAudioVisualizer() {
+function playClickSound() {
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(micStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 64;
-    source.connect(analyser);
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    // Üst hologram
-    $('#listen-hologram').classList.add('active');
-    // Alt görselleştirici
-    $('#bottom-visualizer').classList.add('active');
-
-    drawVisualizer();
-    drawBottomVisualizer();
-  } catch (e) {
-    console.warn('Mikrofon erişimi yok, görsel simüle ediliyor.');
-    simulateVisualizer();
-  }
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type='sine';
+    osc.frequency.setValueAtTime(440,ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880,ctx.currentTime+.1);
+    osc.frequency.exponentialRampToValueAtTime(220,ctx.currentTime+.3);
+    gain.gain.setValueAtTime(.3,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime+.4);
+    setTimeout(()=>ctx.close(),500);
+  } catch(e){}
 }
 
-function stopAudioVisualizer() {
-  if (state.animFrame) cancelAnimationFrame(state.animFrame);
-  if (state.bottomAnimFrame) cancelAnimationFrame(state.bottomAnimFrame);
-  if (micStream) micStream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
-  audioCtx = null; analyser = null; micStream = null;
-  $('#listen-hologram').classList.remove('active');
-  $('#bottom-visualizer').classList.remove('active');
-  clearCanvas('audio-visualizer');
-  clearCanvas('bottom-canvas');
+// ─── Ses görselleştiricisi ─────────────────────────────
+async function startVisualizer() {
+  try {
+    S.micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    S.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = S.audioCtx.createMediaStreamSource(S.micStream);
+    S.analyser = S.audioCtx.createAnalyser();
+    S.analyser.fftSize = 64;
+    src.connect(S.analyser);
+    S.dataArr = new Uint8Array(S.analyser.frequencyBinCount);
+  } catch(e) { S.analyser = null; }
+  $('#bottom-vis').classList.add('show');
+  drawBottom();
 }
 
-function clearCanvas(id) {
-  const canvas = $(`#${id}`);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function stopVisualizer() {
+  if (S.botAnimId) cancelAnimationFrame(S.botAnimId);
+  if (S.micStream) S.micStream.getTracks().forEach(t=>t.stop());
+  if (S.audioCtx) S.audioCtx.close();
+  S.audioCtx=null; S.analyser=null; S.micStream=null;
+  $('#bottom-vis').classList.remove('show');
+  const c=$('#vis-canvas');
+  c.getContext('2d').clearRect(0,0,c.width,c.height);
 }
 
-function drawVisualizer() {
-  const canvas = $('#audio-visualizer');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+function drawBottom() {
+  const canvas=$('#vis-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  let phase=0;
 
   function draw() {
-    state.animFrame = requestAnimationFrame(draw);
+    S.botAnimId=requestAnimationFrame(draw);
     let bars;
-    if (analyser) {
-      analyser.getByteFrequencyData(dataArray);
-      bars = Array.from(dataArray.slice(0, 20));
+    if (S.analyser) {
+      S.analyser.getByteFrequencyData(S.dataArr);
+      bars=Array.from(S.dataArr.slice(0,36));
     } else {
-      bars = Array.from({length: 20}, () => Math.random() * 200 + 20);
+      bars=Array.from({length:36},(_,i)=>Math.abs(Math.sin((i+phase)*.38))*180+Math.random()*50);
     }
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(0,5,15,0.3)';
-    ctx.fillRect(0, 0, W, H);
-
-    const bw = W / bars.length;
-    bars.forEach((v, i) => {
-      const h = (v / 255) * (H - 4);
-      const grad = ctx.createLinearGradient(0, H, 0, H - h);
-      grad.addColorStop(0, '#ff6600');
-      grad.addColorStop(1, '#00e0ff');
-      ctx.fillStyle = grad;
-      ctx.fillRect(i * bw + 1, H - h - 2, bw - 2, h);
-    });
-    // Scan line
-    ctx.strokeStyle = 'rgba(0,224,255,0.4)';
-    ctx.lineWidth = 1;
-    const scanY = (Date.now() % 1000) / 1000 * H;
-    ctx.beginPath(); ctx.moveTo(0, scanY); ctx.lineTo(W, scanY); ctx.stroke();
-  }
-  draw();
-}
-
-function drawBottomVisualizer() {
-  const canvas = $('#bottom-canvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  let phase = 0;
-
-  function draw() {
-    state.bottomAnimFrame = requestAnimationFrame(draw);
-    let bars;
-    if (analyser) {
-      analyser.getByteFrequencyData(dataArray);
-      bars = Array.from(dataArray.slice(0, 40));
-    } else {
-      bars = Array.from({length: 40}, (_, i) => Math.abs(Math.sin((i + phase) * 0.4)) * 200 + Math.random() * 40);
-    }
-    phase += 0.1;
-
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(0,5,15,0.4)';
-    ctx.fillRect(0, 0, W, H);
-
+    phase+=.12;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='rgba(0,3,10,0.5)';
+    ctx.fillRect(0,0,W,H);
     // Izgara
-    ctx.strokeStyle = 'rgba(0,224,255,0.07)';
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x < W; x += 30) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    }
-    for (let y = 0; y < H; y += 20) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-
-    const bw = W / bars.length;
-    bars.forEach((v, i) => {
-      const h = (v / 255) * (H * 0.85);
-      const cx = i * bw + bw / 2;
-      const grad = ctx.createLinearGradient(0, H/2 - h/2, 0, H/2 + h/2);
-      grad.addColorStop(0, 'rgba(0,224,255,0.9)');
-      grad.addColorStop(0.5, 'rgba(255,102,0,0.8)');
-      grad.addColorStop(1, 'rgba(0,224,255,0.9)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(cx - bw/3, H/2 - h/2, bw * 0.6, h);
-      // Glow
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = '#00e0ff';
+    ctx.strokeStyle='rgba(0,212,255,0.06)';
+    ctx.lineWidth=.5;
+    for(let x=0;x<W;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+    for(let y=0;y<H;y+=17){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    // Barlar
+    const bw=W/bars.length;
+    bars.forEach((v,i)=>{
+      const h=(v/255)*(H*.82);
+      const cx=i*bw+bw/2;
+      const g=ctx.createLinearGradient(0,H/2-h/2,0,H/2+h/2);
+      g.addColorStop(0,'rgba(0,212,255,.9)');
+      g.addColorStop(.5,'rgba(255,102,0,.75)');
+      g.addColorStop(1,'rgba(0,212,255,.9)');
+      ctx.fillStyle=g;
+      ctx.shadowBlur=8; ctx.shadowColor='#00d4ff';
+      ctx.fillRect(cx-bw*.28,H/2-h/2,bw*.56,h);
     });
-    ctx.shadowBlur = 0;
-
+    ctx.shadowBlur=0;
     // Merkez çizgi
-    ctx.strokeStyle = 'rgba(0,224,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+    ctx.strokeStyle='rgba(0,212,255,0.2)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
   }
   draw();
 }
 
-function simulateVisualizer() {
-  $('#listen-hologram').classList.add('active');
-  $('#bottom-visualizer').classList.add('active');
-  drawVisualizer();
-  drawBottomVisualizer();
+// ─── Durum güncelleyici ────────────────────────────────
+function setState(text, active=false) {
+  const el=$('#state-text');
+  el.textContent=text;
+  el.classList.toggle('active',active);
 }
 
-// ============= Chat =====================
-const chatMessages = $('#chat-messages');
-const chatInput = $('#chat-input');
-const sendBtn = $('#send-btn');
-const convoFlow = $('#convo-flow');
-
-function addMessage(role, content, opts = {}) {
-  const wrap = document.createElement('div');
-  wrap.className = `msg ${role}`;
-  wrap.innerHTML = `<div>${escapeHtml(content)}</div><div class="ts">${fmtTime(Date.now())}</div>`;
-  chatMessages.appendChild(wrap);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-
-  const displayName = state.settings.ai_name || 'ANKA';
-  if (role === 'user') addConvoFlow(`Sen: ${content.slice(0, 60)}`);
-  if (role === 'assistant') addConvoFlow(`${displayName}: ${content.slice(0, 60)}`);
-
-  return wrap;
-}
-
-function addConvoFlow(text) {
-  if (convoFlow.querySelector('.muted')) convoFlow.innerHTML = '';
-  const item = document.createElement('div');
-  item.className = 'item';
-  item.textContent = text;
-  convoFlow.prepend(item);
-  while (convoFlow.children.length > 8) convoFlow.removeChild(convoFlow.lastChild);
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-async function sendMessage() {
-  const text = chatInput.value.trim();
-  if (!text) return;
-  chatInput.value = '';
-  addMessage('user', text);
-
-  const typing = addMessage('assistant', 'düşünüyor...');
-  typing.classList.add('typing');
-
-  try {
-    const data = await api('/chat', {
-      method: 'POST',
-      body: { conversationId: state.conversationId, message: text }
-    });
-    state.conversationId = data.conversationId;
-    typing.classList.remove('typing');
-    typing.querySelector('div').textContent = data.reply;
-    if (data.type === 'system' || data.type === 'error') {
-      typing.classList.remove('assistant');
-      typing.classList.add(data.type);
-    }
-    // TTS
-    speak(data.reply);
-  } catch (e) {
-    typing.classList.remove('typing');
-    typing.querySelector('div').textContent = `Hata: ${e.message}`;
-  }
-}
-
-sendBtn.addEventListener('click', sendMessage);
-chatInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendMessage();
-});
-
-// ============= Voice (Web Speech API) =================
-const micBtn = $('#mic-btn');
-const voiceStatus = $('#voice-status');
-let recognition = null;
-
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SR();
-  recognition.lang = 'tr-TR';
-  recognition.continuous = false;
-  recognition.interimResults = false;
-
-  recognition.onstart = () => {
-    voiceStatus.textContent = 'Dinleniyor...';
-    micBtn.classList.add('listening');
-    $('#phoenix-container').classList.add('listening');
-    startAudioVisualizer();
-    spawnParticles(15);
-  };
-  recognition.onend = () => {
-    voiceStatus.textContent = 'Hazır';
-    micBtn.classList.remove('listening');
-    $('#phoenix-container').classList.remove('listening');
-    state.recognizing = false;
-    stopAudioVisualizer();
-  };
-  recognition.onerror = (e) => {
-    voiceStatus.textContent = 'Hata: ' + e.error;
-    stopAudioVisualizer();
-    $('#phoenix-container').classList.remove('listening');
-  };
-  recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    chatInput.value = text;
-    sendMessage();
-  };
-}
-
-micBtn.addEventListener('click', () => {
-  if (!recognition) {
-    alert('Tarayıcınız sesli komutu desteklemiyor.');
-    return;
-  }
-  if (state.recognizing) { recognition.stop(); }
-  else { state.recognizing = true; recognition.start(); }
-});
-
-// ============= TTS — Çoklu Ses Modeli =================
-const VOICE_CATEGORIES = [
-  { id: 'auto', label: 'Otomatik', desc: 'Sistem seçer', lang: null },
-  { id: 'tr-female', label: 'TR Kadın', desc: 'Türkçe dişi', lang: 'tr-TR', gender: 'female' },
-  { id: 'tr-male', label: 'TR Erkek', desc: 'Türkçe erkek', lang: 'tr-TR', gender: 'male' },
-  { id: 'en-female', label: 'EN Kadın', desc: 'İngilizce dişi', lang: 'en-US', gender: 'female' },
-  { id: 'en-male', label: 'EN Erkek', desc: 'İngilizce erkek', lang: 'en-US', gender: 'male' },
-  { id: 'en-gb', label: 'EN-GB', desc: 'İngiliz aksanı', lang: 'en-GB', gender: null },
-  { id: 'de', label: 'Almanca', desc: 'Deutsche Stimme', lang: 'de-DE', gender: null },
-  { id: 'fr', label: 'Fransızca', desc: 'Voix française', lang: 'fr-FR', gender: null },
-];
-
+// ─── TTS — Kalın erkek sesi ────────────────────────────
 function loadVoices() {
-  state.availableVoices = speechSynthesis.getVoices();
-  renderVoiceGrid();
+  S.voices = speechSynthesis.getVoices();
+}
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged=loadVoices;
+  setTimeout(loadVoices,600);
 }
 
-function findVoice(cat) {
-  const voices = state.availableVoices;
-  if (cat.id === 'auto' || !cat.lang) return null;
-
-  let matches = voices.filter(v => v.lang.startsWith(cat.lang.split('-')[0]));
-  if (cat.lang.includes('-')) {
-    const exact = voices.filter(v => v.lang === cat.lang);
-    if (exact.length) matches = exact;
+function getMaleVoice() {
+  // Önce Türkçe erkek sesini ara
+  const trMaleKW=['erkek','male','man','david','mark','türkçe'];
+  const trVoices=S.voices.filter(v=>v.lang.startsWith('tr'));
+  if (trVoices.length) {
+    const m=trVoices.find(v=>trMaleKW.some(k=>v.name.toLowerCase().includes(k)));
+    if (m) return m;
+    // Türkçe ses var ama erkek bulunamadı — ilkini al
+    return trVoices[0];
   }
-  if (cat.gender && matches.length > 1) {
-    const femaleKeywords = ['female','woman','girl','zira','sapi5-f','hazel','susan','eva'];
-    const maleKeywords = ['male','man','guy','david','mark','paul','james','alex'];
-    if (cat.gender === 'female') {
-      const f = matches.filter(v => femaleKeywords.some(k => v.name.toLowerCase().includes(k)));
-      if (f.length) return f[0];
-    } else {
-      const m = matches.filter(v => maleKeywords.some(k => v.name.toLowerCase().includes(k)));
-      if (m.length) return m[0];
-    }
-  }
-  return matches[0] || null;
-}
-
-function renderVoiceGrid() {
-  const grid = $('#voice-model-grid');
-  if (!grid) return;
-  grid.innerHTML = VOICE_CATEGORIES.map(cat => {
-    const voice = findVoice(cat);
-    const available = cat.id === 'auto' || !!voice;
-    const isActive = state.selectedVoiceId === cat.id;
-    return `
-      <div class="voice-card ${isActive ? 'active' : ''} ${!available ? 'unavailable' : ''}"
-           data-voice-id="${cat.id}" style="${!available ? 'opacity:0.4' : ''}">
-        <strong>${cat.label}</strong>
-        <span>${cat.desc}</span>
-        ${voice ? `<span style="font-size:9px;color:#6a8aa8;display:block;margin-top:2px">${voice.name.slice(0,22)}</span>` : ''}
-        <button class="voice-preview-btn" data-voice-id="${cat.id}" ${!available ? 'disabled' : ''}>▶ Önizle</button>
-      </div>
-    `;
-  }).join('');
-
-  grid.querySelectorAll('.voice-card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      if (e.target.classList.contains('voice-preview-btn')) return;
-      state.selectedVoiceId = card.dataset.voiceId;
-      renderVoiceGrid();
-    });
-  });
-  grid.querySelectorAll('.voice-preview-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      previewVoice(btn.dataset.voiceId);
-    });
-  });
-}
-
-function previewVoice(catId) {
-  const cat = VOICE_CATEGORIES.find(c => c.id === catId);
-  if (!cat) return;
-  const voice = findVoice(cat);
-  const u = new SpeechSynthesisUtterance('Merhaba, ben Anka. Kurucum Sadık tarafından tasarlandım.');
-  if (voice) u.voice = voice;
-  u.rate = state.voiceRate;
-  u.pitch = state.voicePitch;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+  // Türkçe yoksa İngilizce erkek
+  const enVoices=S.voices.filter(v=>v.lang.startsWith('en'));
+  const enMale=enVoices.find(v=>['male','man','david','mark','james','paul','george'].some(k=>v.name.toLowerCase().includes(k)));
+  if (enMale) return enMale;
+  return S.voices[0]||null;
 }
 
 function speak(text) {
   if (!('speechSynthesis' in window)) return;
-  const catId = state.selectedVoiceId || 'auto';
-  const cat = VOICE_CATEGORIES.find(c => c.id === catId) || VOICE_CATEGORIES[0];
-  const voice = findVoice(cat);
-  const u = new SpeechSynthesisUtterance(text);
-  if (voice) u.voice = voice;
-  u.rate = state.voiceRate;
-  u.pitch = state.voicePitch;
-  u.lang = cat.lang || (state.settings.language === 'en' ? 'en-US' : 'tr-TR');
   speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  const v=getMaleVoice();
+  if (v) u.voice=v;
+  u.lang='tr-TR';
+  u.rate=S.rate;
+  u.pitch=S.pitch; // 0.75 = kalın erkek sesi
+  u.volume=1;
   speechSynthesis.speak(u);
 }
 
-if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged = loadVoices;
-  setTimeout(loadVoices, 500);
+// ─── YouTube açma ──────────────────────────────────────
+function handleYouTube(message) {
+  const patterns=[
+    /youtube(?:'?da|'?de|'?den)?\s+(.+?)\s+(?:aç|çal|oynat|göster)/i,
+    /(.+?)\s+(?:şarkısını?|videosunu?|klibini?)\s+(?:youtube'?da\s+)?(?:aç|çal|oynat)/i,
+    /(.+?)\s+(?:aç|çal)\s+youtube/i
+  ];
+  for (const p of patterns) {
+    const m=message.match(p);
+    if (m) {
+      const q=encodeURIComponent(m[1].trim());
+      const url=`https://www.youtube.com/results?search_query=${q}`;
+      window.open(url,'_blank');
+      return `"${m[1].trim()}" için YouTube'da arama açıldı! 🎵`;
+    }
+  }
+  // Genel "youtube aç" veya link içeriyorsa
+  if (/youtube/i.test(message)) {
+    const q=message.replace(/youtube[^\w]*/i,'').replace(/aç|çal|oynat|göster/gi,'').trim();
+    if (q.length>1) {
+      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,'_blank');
+      return `"${q}" YouTube'da aranıyor! 🎵`;
+    }
+    window.open('https://www.youtube.com','_blank');
+    return 'YouTube açıldı!';
+  }
+  return null;
 }
 
-// ============= Devices ===================
-async function loadDevices() {
-  const list = await api('/devices');
-  renderDevices(list);
+// ─── Chat ──────────────────────────────────────────────
+const msgs=$('#messages');
+const input=$('#chat-input');
+
+function addMsg(role,content) {
+  const d=document.createElement('div');
+  d.className=`msg ${role==='user'?'user':'bot'}`;
+  d.innerHTML=`<div>${esc(content)}</div><div class="ts">${ts()}</div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+  return d;
 }
 
-function renderDevices(list) {
-  $('#device-count').textContent = `${list.filter(d => d.status === 'online').length}/${list.length}`;
-  const html = list.map(d => `
-    <div class="device-row">
-      <span class="device-icon">🖥️</span>
-      <div class="device-meta">
-        <strong>${escapeHtml(d.name)}</strong>
-        <small>${escapeHtml(d.type)} · son: ${fmtTime(d.last_seen)}</small>
-      </div>
-      <span class="device-dot ${d.status}"></span>
-    </div>
-  `).join('') || '<div class="muted">Cihaz yok.</div>';
-
-  $('#right-devices').innerHTML = html;
-  if ($('#devices-list')) $('#devices-list').innerHTML = html;
+function addTyping() {
+  const d=document.createElement('div');
+  d.className='msg bot';
+  d.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+  return d;
 }
 
-socket.on('devices:update', renderDevices);
+async function send() {
+  const text=input.value.trim();
+  if (!text) return;
+  input.value='';
+  addMsg('user',text);
+  setState('Düşünüyor...',true);
 
-socket.on('connect', () => {
-  socket.emit('device:register', {
-    name: detectDeviceName(),
-    type: detectPlatform()
+  // YouTube kontrolü
+  const ytReply=handleYouTube(text);
+  if (ytReply) {
+    setTimeout(()=>{
+      addMsg('bot',ytReply);
+      speak(ytReply);
+      setState('Hazır');
+    },300);
+    return;
+  }
+
+  const typing=addTyping();
+  try {
+    const data=await api('/chat',{method:'POST',body:{conversationId:S.convId,message:text}});
+    S.convId=data.conversationId;
+    typing.remove();
+    addMsg('bot',data.reply);
+    speak(data.reply);
+    setState('Hazır');
+  } catch(e) {
+    typing.remove();
+    const err=`Bağlantı hatası: ${e.message}`;
+    addMsg('bot',err);
+    setState('Hata',false);
+  }
+}
+
+$('#send-btn').addEventListener('click',send);
+input.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
+
+// ─── Mikrofon / Sesli komut ────────────────────────────
+const micBtn=$('#mic-btn');
+let recognition=null;
+
+if ('webkitSpeechRecognition' in window||'SpeechRecognition' in window) {
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();
+  recognition.lang='tr-TR';
+  recognition.continuous=false;
+  recognition.interimResults=false;
+
+  recognition.onstart=()=>{
+    S.recognizing=true;
+    micBtn.classList.add('on');
+    phoenixWrap.classList.add('listening','active');
+    setState('Dinliyorum...',true);
+    startVisualizer();
+    spawnParticles(12);
+  };
+  recognition.onend=()=>{
+    S.recognizing=false;
+    micBtn.classList.remove('on');
+    phoenixWrap.classList.remove('listening','active');
+    setState('Hazır');
+    stopVisualizer();
+  };
+  recognition.onerror=e=>{
+    S.recognizing=false;
+    micBtn.classList.remove('on');
+    phoenixWrap.classList.remove('listening','active');
+    setState('Mikrofon hatası: '+e.error);
+    stopVisualizer();
+  };
+  recognition.onresult=e=>{
+    const t=e.results[0][0].transcript;
+    input.value=t;
+    send();
+  };
+}
+
+function startMic() {
+  if (!recognition) { alert('Tarayıcınız sesli komutu desteklemiyor.'); return; }
+  if (S.recognizing) { recognition.stop(); return; }
+  recognition.start();
+}
+
+micBtn.addEventListener('click',startMic);
+
+// ─── Ayarlar ───────────────────────────────────────────
+function loadSettings() {
+  $('#set-name').value=S.settings.ai_name||'ANKA';
+  $('#voice-rate').value=S.rate;
+  $('#rate-label').textContent=`Hız: ${S.rate}x`;
+  $('#voice-pitch').value=S.pitch;
+  $('#pitch-label').textContent=`Ton: ${S.pitch}x (Kalın erkek sesi)`;
+  document.querySelectorAll('.pers-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.v===S.settings.personality);
+  });
+}
+
+document.querySelectorAll('.pers-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.pers-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
   });
 });
-setInterval(() => socket.emit('device:heartbeat'), 15_000);
 
-function detectPlatform() {
-  const ua = navigator.userAgent;
-  if (/Windows/i.test(ua)) return 'Windows';
-  if (/Mac/i.test(ua)) return 'macOS';
-  if (/Linux/i.test(ua)) return 'Linux';
-  if (/Android/i.test(ua)) return 'Android';
-  if (/iPhone|iPad/i.test(ua)) return 'iOS';
-  return 'Web';
-}
-function detectDeviceName() {
-  return `${detectPlatform()} / ${navigator.platform || 'Browser'}`;
-}
+$('#voice-rate').addEventListener('input',e=>{
+  S.rate=parseFloat(e.target.value);
+  $('#rate-label').textContent=`Hız: ${S.rate.toFixed(2)}x`;
+});
+$('#voice-pitch').addEventListener('input',e=>{
+  S.pitch=parseFloat(e.target.value);
+  $('#pitch-label').textContent=`Ton: ${S.pitch.toFixed(2)}x (${S.pitch<0.85?'Kalın erkek sesi':'Normal'})`;
+});
 
-// ============= Notes ====================
+$('#save-settings').addEventListener('click',()=>{
+  const name=$('#set-name').value.trim()||'ANKA';
+  const pers=document.querySelector('.pers-btn.active')?.dataset.v||'Güler Yüzlü';
+  S.settings={ai_name:name,personality:pers};
+  api('/settings',{method:'PUT',body:{ai_name:name,personality:pers,language:'tr'}})
+    .then(()=>setState('Ayarlar kaydedildi!',true))
+    .catch(()=>{});
+  setTimeout(()=>setState('Hazır'),2000);
+});
+
+$('#test-voice').addEventListener('click',()=>{
+  speak(`Merhaba! Ben ${S.settings.ai_name||'Anka'}. Size nasıl yardımcı olabilirim?`);
+});
+
+// ─── Notlar ────────────────────────────────────────────
 async function loadNotes() {
-  const search = $('#note-search').value.trim();
-  const category = $('#note-filter').value;
-  const list = await api('/notes?' + new URLSearchParams({ search, category }));
-  renderNotes(list);
-}
-
-function renderNotes(list) {
-  $('#notes-list').innerHTML = list.map(n => `
-    <div class="note-card" data-id="${n.id}">
-      <div class="actions">
-        <button onclick="deleteNote(${n.id})" title="Sil">🗑️</button>
-      </div>
-      <span class="cat">${escapeHtml(n.category)}</span>
-      <h4>${escapeHtml(n.title)}</h4>
-      <p>${escapeHtml(n.content)}</p>
+  const s=$('#note-search').value.trim();
+  const list=await api('/notes'+(s?`?search=${encodeURIComponent(s)}`:''));
+  $('#notes-list').innerHTML=list.map(n=>`
+    <div class="note-card">
+      <button class="note-del" onclick="delNote(${n.id})">✕</button>
+      <h4>${esc(n.title)}</h4>
+      <p>${esc(n.content)}</p>
     </div>
-  `).join('') || '<div class="muted">Henüz not yok.</div>';
+  `).join('')||'<p style="color:var(--muted)">Henüz not yok.</p>';
 }
 
-window.deleteNote = async (id) => {
-  if (!confirm('Notu silmek istiyor musun?')) return;
-  await api(`/notes/${id}`, { method: 'DELETE' });
+window.delNote=async id=>{
+  if (!confirm('Silinsin mi?')) return;
+  await api(`/notes/${id}`,{method:'DELETE'});
   loadNotes();
 };
 
-$('#note-new-btn').addEventListener('click', async () => {
-  const title = prompt('Başlık:');
-  if (!title) return;
-  const content = prompt('İçerik:');
-  if (!content) return;
-  const category = prompt('Kategori (Profesyonel/Sorumlu/Müracaat/Özel/Genel):', 'Genel') || 'Genel';
-  await api('/notes', { method: 'POST', body: { title, content, category } });
+$('#note-new').addEventListener('click',async()=>{
+  const title=prompt('Başlık:'); if(!title) return;
+  const content=prompt('İçerik:'); if(!content) return;
+  await api('/notes',{method:'POST',body:{title,content,category:'Genel'}});
   loadNotes();
 });
-$('#note-search').addEventListener('input', () => loadNotes());
-$('#note-filter').addEventListener('change', () => loadNotes());
+$('#note-search').addEventListener('input',()=>loadNotes());
 
-// ============= Settings ==================
-async function loadSettings() {
-  state.settings = await api('/settings');
-  $('#set-ai-name').value = state.settings.ai_name || 'ANKA';
-  $('#set-language').value = state.settings.language || 'tr';
-  $$('.pers-card').forEach(c => {
-    c.classList.toggle('active', c.dataset.value === state.settings.personality);
-  });
-  renderVoiceGrid();
-}
-
-$$('.pers-card').forEach(c => {
-  c.addEventListener('click', () => {
-    $$('.pers-card').forEach(x => x.classList.remove('active'));
-    c.classList.add('active');
-  });
+// ─── Socket ────────────────────────────────────────────
+socket.on('connect',()=>{
+  socket.emit('device:register',{name:navigator.platform||'Web',type:'Web'});
 });
+setInterval(()=>socket.emit('device:heartbeat'),15000);
 
-$('#save-settings').addEventListener('click', async () => {
-  const activePers = document.querySelector('.pers-card.active');
-  const payload = {
-    ai_name: $('#set-ai-name').value.trim() || 'ANKA',
-    language: $('#set-language').value,
-    personality: activePers ? activePers.dataset.value : 'Profesyonel'
-  };
-  state.settings = await api('/settings', { method: 'PUT', body: payload });
-  alert('Ayarlar kaydedildi.');
-});
+// ─── Başlangıç ─────────────────────────────────────────
+api('/settings').then(d=>{ S.settings=d; }).catch(()=>{});
+setState('Merhaba! Size nasıl yardımcı olabilirim?');
 
-// Ses hızı / ton
-const voiceRateSlider = $('#voice-rate');
-const voicePitchSlider = $('#voice-pitch');
-if (voiceRateSlider) {
-  voiceRateSlider.addEventListener('input', () => {
-    state.voiceRate = parseFloat(voiceRateSlider.value);
-    $('#voice-rate-label').textContent = `Hız: ${state.voiceRate.toFixed(1)}x`;
-  });
-}
-if (voicePitchSlider) {
-  voicePitchSlider.addEventListener('input', () => {
-    state.voicePitch = parseFloat(voicePitchSlider.value);
-    $('#voice-pitch-label').textContent = `Ton: ${state.voicePitch.toFixed(1)}x`;
-  });
-}
-
-$('#clear-memory').addEventListener('click', async () => {
-  if (!confirm('Tüm uzun süreli hafıza silinecek. Emin misin?')) return;
-  await api('/memory', { method: 'DELETE' });
-  alert('Hafıza temizlendi.');
-});
-
-$('#export-memory').addEventListener('click', async () => {
-  const data = await api('/memory/export');
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `anka-memory-${Date.now()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
-// ============= Init ======================
-loadSettings();
-loadDevices();
+// Başlangıçta karşılama sesi (kısa gecikmeyle)
+setTimeout(()=>{
+  speak(`Merhaba! Ben Anka. Emirlerinizi bekliyorum.`);
+},1500);
