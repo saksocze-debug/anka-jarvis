@@ -1,4 +1,4 @@
-// aiProvider.js — OpenAI / Anthropic / Groq / Ollama / Mock
+// aiProvider.js — OpenAI / Anthropic / Groq / Gemini / Ollama / Mock
 const fetch = require('node-fetch');
 
 const CREATOR_PATTERNS = [
@@ -24,6 +24,10 @@ class AIProvider {
     this.groq = {
       apiKey: config.groqApiKey,
       model: config.groqModel || 'llama-3.3-70b-versatile'
+    };
+    this.gemini = {
+      apiKey: config.geminiApiKey,
+      model: config.geminiModel || 'gemini-2.0-flash'
     };
     this.ollama = {
       baseUrl: config.ollamaBaseUrl || 'http://localhost:11434',
@@ -87,6 +91,7 @@ class AIProvider {
         case 'openai':    return await this.callOpenAI(messages);
         case 'anthropic': return await this.callAnthropic(messages);
         case 'groq':      return await this.callGroq(messages);
+        case 'gemini':    return await this.callGemini(messages);
         case 'ollama':    return await this.callOllama(messages);
         default:          return this.mockResponse(userMessage);
       }
@@ -136,6 +141,39 @@ class AIProvider {
     return data.choices?.[0]?.message?.content?.trim() || '(boş yanıt)';
   }
 
+  async callGemini(messages) {
+    if (!this.gemini.apiKey) throw new Error('GEMINI_API_KEY tanımsız');
+
+    const system = messages.find(m => m.role === 'system')?.content || '';
+    const rest = messages.filter(m => m.role !== 'system');
+
+    // Gemini "contents" formatı: role 'user' | 'model', system ayrı alanda
+    const contents = rest.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.gemini.model}:generateContent?key=${this.gemini.apiKey}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+        generationConfig: {
+          temperature: this.temperature,
+          maxOutputTokens: this.maxTokens
+        }
+      })
+    });
+
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    return text.trim() || '(boş yanıt)';
+  }
+
   async callAnthropic(messages) {
     if (!this.anthropic.apiKey) throw new Error('ANTHROPIC_API_KEY tanımsız');
     const system = messages.find(m => m.role === 'system')?.content || '';
@@ -178,8 +216,8 @@ class AIProvider {
 
   mockResponse(userMessage, errorNote) {
     const samples = [
-      `Sistemler aktif. Mesajını aldım: "${userMessage}". Mock modda çalışıyorum — .env'deki GROQ_API_KEY ve AI_PROVIDER=groq ayarını yap.`,
-      `"${userMessage}" komutun alındı. Groq bağlandığında gerçek yanıtlar veririm.`
+      `Sistemler aktif. Mesajını aldım: "${userMessage}". Mock modda çalışıyorum — .env'deki AI_PROVIDER (groq/gemini) ve ilgili API key ayarını yap.`,
+      `"${userMessage}" komutun alındı. Bir AI sağlayıcı bağlandığında gerçek yanıtlar veririm.`
     ];
     const base = samples[Math.floor(Math.random() * samples.length)];
     return errorNote ? `${base}\n\nHata: ${errorNote}` : base;

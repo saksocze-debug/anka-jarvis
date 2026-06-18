@@ -19,7 +19,7 @@ const AIProvider      = require('./modules/aiProvider');
 const CommandParser   = require('./modules/commandParser');
 
 // DB
-const dbDir = path.join(__dirname, 'database');
+const dbDir = path.join(__dirname, '..', 'database');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 const db = new Database(path.join(dbDir, 'jarvis.db'));
 db.pragma('journal_mode = WAL');
@@ -34,6 +34,9 @@ const ai = new AIProvider({
   // Groq
   groqApiKey:      process.env.GROQ_API_KEY,
   groqModel:       process.env.GROQ_MODEL,
+  // Gemini
+  geminiApiKey:    process.env.GEMINI_API_KEY,
+  geminiModel:     process.env.GEMINI_MODEL,
   // OpenAI
   openaiApiKey:    process.env.OPENAI_API_KEY,
   openaiModel:     process.env.OPENAI_MODEL,
@@ -66,7 +69,23 @@ const devices = new DeviceManager(db, io);
 const parser  = new CommandParser({ memory, notes, devices, settings });
 
 // ─── API ────────────────────────────────────────────────
-app.get('/api/health', (_, res) => res.json({ ok: true, provider: process.env.AI_PROVIDER, ts: Date.now() }));
+app.get('/api/health', (_, res) => {
+  const provider = (process.env.AI_PROVIDER || 'mock').toLowerCase();
+  const keyMap = {
+    groq: !!process.env.GROQ_API_KEY,
+    gemini: !!process.env.GEMINI_API_KEY,
+    openai: !!process.env.OPENAI_API_KEY,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    ollama: true,
+    mock: true
+  };
+  res.json({
+    ok: true,
+    provider,
+    apiKeyConfigured: keyMap[provider] ?? false,
+    ts: Date.now()
+  });
+});
 
 app.get('/api/settings', (_, res) => res.json(settings.getAll()));
 app.put('/api/settings', (req, res) => res.json(settings.setMany(req.body || {})));
