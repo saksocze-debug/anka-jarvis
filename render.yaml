@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: anka-jarvis
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: AI_PROVIDER
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: PORT
+        value: "3400"
+      - key: FRONTEND_ORIGIN
+        value: "*"
+      - key: AI_TEMPERATURE
+        value: "0.7"
+      - key: AI_MAX_TOKENS
+        value: "4096"

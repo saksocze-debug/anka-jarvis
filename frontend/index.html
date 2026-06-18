@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>ANKA — Yapay Zeka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="clock">
+    <div id="clock-time">00:00:00</div>
+    <div id="clock-date">--</div>
+  </div>
+  <div class="brand">
+    <h1>ANKA</h1>
+    <span>Yapay Zeka</span>
+  </div>
+  <div class="status-pill">
+    <span class="dot"></span><span id="status-lbl">AKTİF</span>
+  </div>
+</header>
+
+<div class="root-layout">
+
+  <!-- NAV -->
+  <nav class="sidenav">
+    <button class="ni active" data-v="chat" aria-label="Sohbet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <span>Sohbet</span>
+    </button>
+    <button class="ni" data-v="notes" aria-label="Notlar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span>Notlar</span>
+    </button>
+    <button class="ni" data-v="settings" aria-label="Ayarlar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span>Ayarlar</span>
+    </button>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- SOHBET -->
+    <section class="view active" id="view-chat">
+
+      <!-- Dünya hologramı -->
+      <div class="globe-section">
+        <div class="globe-wrap" id="globe-wrap" role="button" tabindex="0" aria-label="ANKA'yı aktifleştir">
+
+          <!-- Yörüngeler -->
+          <div class="ring rg1"></div>
+          <div class="ring rg2"></div>
+          <div class="ring rg3"></div>
+
+          <!-- Dünya SVG hologramı -->
+          <svg class="globe-svg" id="globe-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <radialGradient id="gEarth" cx="40%" cy="35%">
+                <stop offset="0%"   stop-color="#1a6fff" stop-opacity=".9"/>
+                <stop offset="60%"  stop-color="#0a2a6e" stop-opacity=".85"/>
+                <stop offset="100%" stop-color="#020d2e" stop-opacity=".9"/>
+              </radialGradient>
+              <radialGradient id="gGlow" cx="50%" cy="50%">
+                <stop offset="0%"  stop-color="#00d4ff" stop-opacity=".35"/>
+                <stop offset="45%" stop-color="#00d4ff" stop-opacity=".12"/>
+                <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+              </radialGradient>
+              <filter id="fGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3.5" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <clipPath id="circleClip">
+                <circle cx="100" cy="100" r="68"/>
+              </clipPath>
+            </defs>
+
+            <!-- Dış parlama -->
+            <circle cx="100" cy="100" r="82" fill="url(#gGlow)"/>
+
+            <!-- Dünya küresi -->
+            <circle cx="100" cy="100" r="68" fill="url(#gEarth)" filter="url(#fGlow)"/>
+
+            <!-- Enlem çizgileri -->
+            <g clip-path="url(#circleClip)" stroke="#00d4ff" stroke-width=".6" fill="none" opacity=".35">
+              <ellipse cx="100" cy="100" rx="68" ry="10"/>
+              <ellipse cx="100" cy="100" rx="68" ry="24"/>
+              <ellipse cx="100" cy="100" rx="68" ry="42"/>
+              <ellipse cx="100" cy="100" rx="68" ry="58"/>
+              <ellipse cx="100" cy="100" rx="68" ry="68"/>
+            </g>
+
+            <!-- Boylam çizgileri -->
+            <g clip-path="url(#circleClip)" stroke="#00d4ff" stroke-width=".6" fill="none" opacity=".35">
+              <ellipse cx="100" cy="100" rx="10"  ry="68" class="meridian"/>
+              <ellipse cx="100" cy="100" rx="24"  ry="68" class="meridian"/>
+              <ellipse cx="100" cy="100" rx="42"  ry="68" class="meridian"/>
+              <ellipse cx="100" cy="100" rx="58"  ry="68" class="meridian"/>
+            </g>
+
+            <!-- Kıtalar (basitleştirilmiş blob'lar) -->
+            <g clip-path="url(#circleClip)" fill="#22d46e" opacity=".55" filter="url(#fGlow)">
+              <path d="M80,70 C85,65 95,63 100,68 C105,72 108,78 104,84 C100,90 88,92 82,87 C75,82 74,76 80,70Z"/>
+              <path d="M110,75 C115,70 124,70 128,76 C132,82 130,90 124,93 C118,96 110,90 108,83 C106,78 107,79 110,75Z"/>
+              <path d="M72,100 C78,96 88,97 91,104 C94,111 88,118 81,118 C74,118 68,112 68,105 C68,102 70,102 72,100Z"/>
+              <path d="M105,100 C111,96 120,98 123,105 C126,112 122,120 115,121 C108,122 102,116 102,109 C102,105 103,103 105,100Z"/>
+              <path d="M85,122 C90,118 98,119 101,125 C104,131 100,138 93,138 C86,138 81,132 82,126 C82,124 83,123 85,122Z"/>
+            </g>
+
+            <!-- Işıltı noktaları (şehirler) -->
+            <g fill="#00d4ff" filter="url(#fGlow)" class="city-dots">
+              <circle cx="82"  cy="78"  r="1.5" opacity=".9"/>
+              <circle cx="118" cy="82"  r="1.5" opacity=".9"/>
+              <circle cx="76"  cy="108" r="1.5" opacity=".9"/>
+              <circle cx="116" cy="108" r="1.2" opacity=".8"/>
+              <circle cx="90"  cy="128" r="1.2" opacity=".8"/>
+              <circle cx="103" cy="72"  r="1"   opacity=".7"/>
+            </g>
+
+            <!-- Kenar halkası -->
+            <circle cx="100" cy="100" r="68" fill="none" stroke="#00d4ff" stroke-width="1.2" opacity=".5" filter="url(#fGlow)"/>
+
+            <!-- Tarama çizgisi -->
+            <line x1="32" y1="100" x2="168" y2="100" stroke="#00d4ff" stroke-width=".5" opacity=".3" class="scan-h"/>
+          </svg>
+
+          <!-- Parçacık konteyneri -->
+          <div class="ptcl-wrap" id="ptcl-wrap" aria-hidden="true"></div>
+
+          <!-- Dikey holografik tarama bandı -->
+          <div class="scan-band" aria-hidden="true"></div>
+
+          <!-- Burst halkaları -->
+          <div class="burst b1" id="b1"></div>
+          <div class="burst b2" id="b2"></div>
+          <div class="burst b3" id="b3"></div>
+
+          <!-- Dinliyorum etiketi -->
+          <div class="listen-tag" id="listen-tag">
+            <span class="lt-dot"></span>DİNLİYORUM
+          </div>
+        </div>
+
+        <!-- Durum metni -->
+        <p class="globe-status" id="globe-status">Merhaba! Nasıl yardımcı olabilirim?</p>
+
+        <!-- Ses görselleştirici — mobil + masaüstü uyumlu -->
+        <div class="vis-wrap" id="vis-wrap">
+          <div class="vis-bars" id="vis-bars">
+            <!-- JS ile bar'lar oluşturulacak -->
+          </div>
+          <span class="vis-lbl">⚡ SES ANALİZİ</span>
+        </div>
+      </div>
+
+      <!-- Mesajlar -->
+      <div class="messages" id="messages" role="log" aria-live="polite"></div>
+
+      <!-- Input -->
+      <div class="input-bar">
+        <button id="mic-btn" class="icon-btn" aria-label="Sesli komut">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+            <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+          </svg>
+        </button>
+        <input id="chat-in" type="text" placeholder="ANKA'ya bir şey sorun…" autocomplete="off" maxlength="1500" inputmode="text"/>
+        <button id="send-btn" class="icon-btn" aria-label="Gönder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- NOTLAR -->
+    <section class="view" id="view-notes">
+      <div class="sh">
+        <h2>NOTLAR</h2>
+        <button id="note-add" class="btn-p">+ Yeni</button>
+      </div>
+      <input id="note-s" class="sinput" type="search" placeholder="Ara…"/>
+      <div id="notes-list" class="notes-list"></div>
+
+      <!-- Not formu (inline) -->
+      <div class="note-form" id="note-form" hidden>
+        <input id="nf-title"   type="text"      placeholder="Başlık"   maxlength="100"/>
+        <textarea id="nf-body" placeholder="İçerik…" rows="4" maxlength="2000"></textarea>
+        <select id="nf-cat">
+          <option>Genel</option><option>İş</option><option>Kişisel</option>
+          <option>Fikir</option><option>Görev</option><option>Önemli</option>
+        </select>
+        <div class="nf-btns">
+          <button id="nf-cancel" class="btn-o">İptal</button>
+          <button id="nf-save"   class="btn-p">Kaydet</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AYARLAR -->
+    <section class="view" id="view-settings">
+      <div class="sh"><h2>AYARLAR</h2></div>
+      <div class="sgroup">
+        <label>Asistan Adı</label>
+        <input id="s-name" type="text" maxlength="30" placeholder="ANKA"/>
+      </div>
+      <div class="sgroup">
+        <label>Kişilik</label>
+        <div class="pers-row">
+          <button class="pb active" data-p="Güler Yüzlü">😊 Güler Yüzlü</button>
+          <button class="pb" data-p="Profesyonel">💼 Profesyonel</button>
+          <button class="pb" data-p="Yaratıcı">🎨 Yaratıcı</button>
+          <button class="pb" data-p="Analitik">📊 Analitik</button>
+        </div>
+      </div>
+      <div class="sgroup">
+        <label>Konuşma Hızı — <span id="rv">0.88x</span></label>
+        <input id="s-rate" type="range" min="0.5" max="1.5" step="0.05" value="0.88"/>
+      </div>
+      <div class="sgroup">
+        <label>Ses Tonu (↓ kalın erkek) — <span id="pv">0.78x</span></label>
+        <input id="s-pitch" type="range" min="0.4" max="1.5" step="0.05" value="0.78"/>
+      </div>
+      <div class="sgroup">
+        <label>Ses Modeli</label>
+        <div class="voice-row" id="voice-row">
+          <button class="vb active" data-vm="auto">🔊 Otomatik</button>
+          <button class="vb" data-vm="tr-male">🇹🇷 TR Erkek</button>
+          <button class="vb" data-vm="tr-female">🇹🇷 TR Kadın</button>
+          <button class="vb" data-vm="en-male">🇬🇧 EN Erkek</button>
+          <button class="vb" data-vm="en-female">🇬🇧 EN Kadın</button>
+        </div>
+      </div>
+      <button id="test-v" class="btn-o" style="margin-bottom:8px">🔊 Sesi Test Et</button>
+      <button id="s-save" class="btn-p">Kaydet</button>
+      <div class="sgroup" style="margin-top:16px">
+        <button id="exp-btn"  class="btn-o">📤 Veriyi Dışa Aktar</button>
+        <button id="clr-btn"  class="btn-d" style="margin-top:8px">🗑 Hafızayı Temizle</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="footer">
+  <span class="f-ok">● Sistemler Aktif</span>
+  <span class="f-v">ANKA v3</span>
+  <span class="f-by">⚡ Kurucu: Sadık</span>
+</footer>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
