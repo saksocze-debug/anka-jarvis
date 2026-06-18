@@ -1,163 +1,312 @@
+/* ═══ ANKA v3 — Cyber Globe UI ═══ */
 :root {
-  --bg: #020810;
-  --bg2: #040e1c;
-  --panel: rgba(6,18,36,0.7);
-  --border: rgba(0,210,255,0.15);
-  --neon: #00d4ff;
-  --neon2: rgba(0,212,255,0.4);
-  --fire: #ff6600;
-  --fire2: rgba(255,102,0,0.35);
-  --text: #cce8f8;
-  --muted: #4a7090;
-  --ok: #22d46e;
-  --danger: #ff3a5c;
+  --bg:    #020912;
+  --bg2:   #040f1e;
+  --panel: rgba(4,15,30,.8);
+  --bdr:   rgba(0,212,255,.13);
+  --neon:  #00d4ff;
+  --neon2: rgba(0,212,255,.35);
+  --neon3: rgba(0,212,255,.08);
+  --fire:  #ff6600;
+  --fire2: rgba(255,102,0,.3);
+  --grn:   #22d46e;
+  --red:   #ff3a5c;
+  --txt:   #c8e8f8;
+  --txt2:  #6a9ab8;
+  --mut:   #2d5070;
+  --r:     10px;
+  --nav-w: 68px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(ellipse at 20% 0%,#091828 0%,var(--bg) 65%);color:var(--text)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.6}
 
-/* TOPBAR */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:rgba(2,6,16,0.8);backdrop-filter:blur(12px)}
-#clock-time{font-family:'Courier New',monospace;font-size:17px;color:var(--neon);letter-spacing:2px;text-shadow:0 0 10px var(--neon2)}
-#clock-date{font-size:10px;color:var(--muted);margin-top:2px}
-.brand{text-align:center}
-.brand h1{font-size:24px;letter-spacing:10px;color:var(--neon);text-shadow:0 0 20px var(--neon2),0 0 40px rgba(0,212,255,0.2)}
-.brand span{font-size:10px;color:var(--fire);letter-spacing:4px}
-.status-dot{color:var(--ok);font-size:18px;text-shadow:0 0 10px var(--ok);animation:blink 2s infinite}
-@keyframes blink{50%{opacity:0.5}}
+/* ── Arka plan grid ── */
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);
+  background-size:36px 36px}
 
-/* LAYOUT */
-.layout{display:grid;grid-template-columns:80px 1fr;height:calc(100vh - 108px)}
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
 
-/* SIDEBAR */
-.sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 0;gap:4px;background:rgba(2,6,14,0.5)}
-.nav-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:12px 6px;margin:0 8px;border-radius:8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:9px;letter-spacing:2px;transition:all .2s}
-.nav-btn .icon{font-size:17px}
-.nav-btn:hover{color:var(--text);border-color:var(--border)}
-.nav-btn.active{color:var(--neon);border-color:var(--neon2);background:rgba(0,212,255,0.07);box-shadow:0 0 16px rgba(0,212,255,0.12) inset}
+/* ════════ TOPBAR ════════ */
+.topbar{
+  position:relative;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;
+  border-bottom:1px solid var(--bdr);
+  background:rgba(2,9,18,.92);
+  backdrop-filter:blur(16px);
+  min-height:56px;
+}
+#clock-time{font-family:'Orbitron',monospace;font-size:14px;color:var(--neon);letter-spacing:2px;text-shadow:0 0 10px var(--neon2)}
+#clock-date{font-size:9px;color:var(--mut);letter-spacing:1.5px;margin-top:2px}
+.brand h1{font-family:'Orbitron',monospace;font-size:18px;font-weight:900;letter-spacing:10px;color:var(--neon);text-shadow:0 0 20px var(--neon2),0 0 40px rgba(0,212,255,.15)}
+.brand span{display:block;font-size:8px;letter-spacing:4px;color:var(--fire);text-align:center;margin-top:1px}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:2px;color:var(--grn)}
+.status-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:blink 2s infinite}
+@keyframes blink{50%{opacity:.4}}
 
-/* MAIN */
-.main-area{overflow:hidden;position:relative}
-.view{display:none;height:100%;flex-direction:column;padding:16px 20px;overflow-y:auto}
+/* ════════ LAYOUT ════════ */
+.root-layout{display:flex;height:calc(100dvh - 56px - 36px);position:relative;z-index:1}
+
+/* ════════ SIDENAV ════════ */
+.sidenav{
+  width:var(--nav-w);flex-shrink:0;
+  border-right:1px solid var(--bdr);
+  background:rgba(2,6,14,.6);
+  display:flex;flex-direction:column;align-items:center;
+  padding:14px 0;gap:4px;
+}
+.ni{
+  width:52px;border-radius:var(--r);
+  border:1px solid transparent;background:transparent;color:var(--mut);
+  padding:9px 4px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:8px;letter-spacing:1.5px;font-family:'Inter',sans-serif;
+  transition:all .2s;-webkit-user-select:none;user-select:none;
+}
+.ni svg{width:18px;height:18px;stroke:currentColor}
+.ni:hover{color:var(--txt);border-color:var(--bdr);background:var(--neon3)}
+.ni.active{color:var(--neon);border-color:var(--neon2);background:var(--neon3);box-shadow:0 0 16px rgba(0,212,255,.1) inset}
+
+/* ════════ MAIN ════════ */
+.main{flex:1;overflow:hidden;position:relative}
+.view{display:none;height:100%;flex-direction:column;padding:14px 16px;overflow-y:auto;gap:10px}
 .view.active{display:flex}
-.view h2{font-size:18px;letter-spacing:5px;color:var(--neon);margin-bottom:16px;text-shadow:0 0 12px var(--neon2)}
 
-/* CHAT */
-#view-chat{padding:10px 16px}
-.chat-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0}
+/* ════════ CHAT VIEW ════════ */
+#view-chat{padding:10px 14px;gap:8px}
 
-/* PHOENIX */
-.phoenix-wrap{position:relative;width:260px;height:260px;display:grid;place-items:center;cursor:pointer;margin-bottom:8px;flex-shrink:0}
-.ring{position:absolute;border-radius:50%;border:1px dashed rgba(0,212,255,0.2);animation:spin 20s linear infinite}
-.r1{width:260px;height:260px;animation-duration:22s}
-.r2{width:200px;height:200px;border-color:rgba(255,102,0,0.2);animation-duration:14s;animation-direction:reverse}
-.r3{width:148px;height:148px;animation-duration:8s}
+/* ── Globe Section ── */
+.globe-section{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
+
+.globe-wrap{
+  position:relative;
+  width:220px;height:220px;
+  display:grid;place-items:center;
+  cursor:pointer;outline:none;
+  border-radius:50%;
+  -webkit-user-select:none;user-select:none;
+}
+@media(max-width:380px){
+  .globe-wrap{width:180px;height:180px}
+}
+
+/* Focus ring erişilebilirlik */
+.globe-wrap:focus-visible{outline:2px solid var(--neon);outline-offset:6px}
+
+/* Dönen halkalar */
+.ring{position:absolute;border-radius:50%;border:1px dashed;animation:spin 22s linear infinite;pointer-events:none}
+.rg1{width:220px;height:220px;border-color:rgba(0,212,255,.18);animation-duration:28s}
+.rg2{width:168px;height:168px;border-color:rgba(255,102,0,.15);animation-direction:reverse;animation-duration:18s}
+.rg3{width:124px;height:124px;border-color:rgba(0,212,255,.22);animation-duration:11s}
+@media(max-width:380px){
+  .rg1{width:180px;height:180px}
+  .rg2{width:138px;height:138px}
+  .rg3{width:102px;height:102px}
+}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.pulse-ring{position:absolute;width:200px;height:200px;border-radius:50%;border:2px solid var(--neon);opacity:0;transform:scale(0.8);transition:all .3s}
-.phoenix-wrap.active .pulse-ring{animation:pulseRing 1.2s ease-out infinite}
-@keyframes pulseRing{0%{transform:scale(0.85);opacity:0.8}100%{transform:scale(1.3);opacity:0}}
+/* Globe SVG */
+.globe-svg{
+  width:136px;height:136px;
+  position:relative;z-index:2;
+  filter:drop-shadow(0 0 12px rgba(0,212,255,.65)) drop-shadow(0 0 26px rgba(0,80,200,.4));
+  animation:globeFloat 4s ease-in-out infinite,globeFlicker 10s step-start infinite;
+  transition:filter .4s;
+}
+@media(max-width:380px){.globe-svg{width:110px;height:110px}}
+@keyframes globeFloat{0%,100%{transform:translateY(0) rotateX(0deg)}50%{transform:translateY(-8px) rotateX(2deg)}}
+@keyframes globeFlicker{0%,88%,100%{opacity:1}89%{opacity:.55}90%{opacity:1}93%{opacity:.35}94%{opacity:1}}
 
-.phoenix-glow{position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(255,102,0,0.12) 0%,rgba(0,212,255,0.08) 50%,transparent 70%);animation:glowPulse 3.5s ease-in-out infinite}
-@keyframes glowPulse{0%,100%{transform:scale(1);opacity:0.6}50%{transform:scale(1.15);opacity:1}}
+/* Meridian döndürme */
+.meridian{animation:meridianSpin 12s linear infinite;transform-origin:100px 100px}
+.meridian:nth-child(2){animation-duration:16s;animation-direction:reverse}
+.meridian:nth-child(3){animation-duration:20s}
+.meridian:nth-child(4){animation-duration:9s;animation-direction:reverse}
+@keyframes meridianSpin{to{transform:rotateY(360deg)}}
 
-.phoenix-svg{width:160px;height:160px;filter:drop-shadow(0 0 10px rgba(0,212,255,0.7)) drop-shadow(0 0 22px rgba(255,102,0,0.3));animation:float 4s ease-in-out infinite,flicker 8s step-start infinite;position:relative;z-index:2;transition:filter .3s}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-@keyframes flicker{0%,93%,100%{opacity:1}94%{opacity:0.6}95%{opacity:1}97%{opacity:0.4}98%{opacity:1}}
+/* Şehir noktaları titreme */
+.city-dots circle{animation:cityBlink 2.5s ease-in-out infinite}
+.city-dots circle:nth-child(2){animation-delay:.4s}
+.city-dots circle:nth-child(3){animation-delay:.8s}
+.city-dots circle:nth-child(4){animation-delay:1.2s}
+.city-dots circle:nth-child(5){animation-delay:1.6s}
+.city-dots circle:nth-child(6){animation-delay:2s}
+@keyframes cityBlink{0%,100%{opacity:.9}50%{opacity:.2}}
 
-.wing-l,.wing-r{animation:wingFlap 3.2s ease-in-out infinite;transform-origin:100px 138px}
-.wing-r{animation-delay:.2s}
-@keyframes wingFlap{0%,100%{transform:scaleY(1)}50%{transform:scaleY(0.82)}}
+/* Tarama çizgisi */
+.scan-h{animation:scanH 3s ease-in-out infinite}
+@keyframes scanH{0%,100%{opacity:.15}50%{opacity:.55}}
 
-/* Tıklandığında efekt */
-.phoenix-wrap.clicked .phoenix-svg{filter:drop-shadow(0 0 25px rgba(0,212,255,1)) drop-shadow(0 0 50px rgba(255,102,0,0.8));animation:float 1.5s ease-in-out infinite,holoBurst .6s ease-out}
-@keyframes holoBurst{0%{transform:scale(1)}30%{transform:scale(1.15)}60%{transform:scale(0.95)}100%{transform:scale(1)}}
-
-.phoenix-wrap.listening .phoenix-svg{filter:drop-shadow(0 0 18px rgba(255,100,0,0.9)) drop-shadow(0 0 35px rgba(0,212,255,0.6))}
-.phoenix-wrap.listening .r1,.phoenix-wrap.listening .r2,.phoenix-wrap.listening .r3{border-color:rgba(255,100,0,0.5)!important;animation-duration:4s!important}
+/* DİNLEME durumu */
+.globe-wrap.listening .globe-svg{
+  filter:drop-shadow(0 0 22px rgba(255,80,0,.85)) drop-shadow(0 0 40px rgba(0,212,255,.6));
+  animation:globeFloat 1.4s ease-in-out infinite,globeFlicker 2s step-start infinite;
+}
+.globe-wrap.listening .rg1,.globe-wrap.listening .rg2,.globe-wrap.listening .rg3{
+  border-color:rgba(255,100,0,.55)!important;
+  animation-duration:3s!important;
+}
 
 /* Parçacıklar */
-.particles{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:50%}
-.ptcl{position:absolute;border-radius:50%;opacity:0;animation:floatUp var(--d) ease-in forwards}
-@keyframes floatUp{0%{opacity:.9;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-75px) scale(.25)}}
+.ptcl-wrap{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:50%;z-index:3}
+.pt{position:absolute;border-radius:50%;opacity:0;animation:ptUp var(--d,.8s) ease-in forwards}
+@keyframes ptUp{0%{opacity:.9;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-65px) scale(.2)}}
+
+/* Burst halkaları */
+.burst{position:absolute;border-radius:50%;border:2px solid var(--neon);opacity:0;transform:scale(.5);pointer-events:none;z-index:4}
+.b1{width:120px;height:120px}
+.b2{width:170px;height:170px;border-color:var(--fire)}
+.b3{width:220px;height:220px}
+.globe-wrap.bursting .b1{animation:burstOut .6s ease-out forwards}
+.globe-wrap.bursting .b2{animation:burstOut .8s .08s ease-out forwards}
+.globe-wrap.bursting .b3{animation:burstOut 1s .16s ease-out forwards}
+@keyframes burstOut{0%{opacity:.85;transform:scale(.5)}100%{opacity:0;transform:scale(1.08)}}
 
 /* Dinliyorum etiketi */
-.listen-label{position:absolute;bottom:-32px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:5px;color:var(--neon);opacity:0;transition:opacity .3s;white-space:nowrap;text-shadow:0 0 10px var(--neon)}
-.phoenix-wrap.listening .listen-label{opacity:1;animation:blink .8s step-start infinite}
+.listen-tag{
+  position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:5px;
+  font-family:'Orbitron',monospace;font-size:8px;letter-spacing:4px;
+  color:var(--neon);white-space:nowrap;
+  opacity:0;transition:opacity .3s;text-shadow:0 0 10px var(--neon);
+  pointer-events:none;
+}
+.lt-dot{width:5px;height:5px;border-radius:50%;background:var(--fire);box-shadow:0 0 6px var(--fire);animation:blink .7s infinite}
+.globe-wrap.listening .listen-tag{opacity:1}
 
 /* Durum metni */
-.state-text{font-size:13px;color:var(--muted);letter-spacing:1px;text-align:center;margin:4px 0 8px;min-height:20px;transition:color .3s}
-.state-text.active{color:var(--neon)}
+.globe-status{font-size:12px;color:var(--txt2);text-align:center;letter-spacing:.5px;min-height:18px;transition:color .3s}
+.globe-status.active{color:var(--neon)}
 
-/* Alt görselleştirici */
-.bottom-vis{display:none;flex-direction:column;align-items:center;gap:3px;margin:4px 0}
-.bottom-vis.show{display:flex}
-#vis-canvas{border:1px solid rgba(0,212,255,0.18);border-radius:6px;background:rgba(0,4,12,0.6)}
-.vis-tag{font-size:8px;letter-spacing:4px;color:var(--fire);text-shadow:0 0 8px var(--fire)}
+/* ── Ses Görselleştirici (CSS Bar'lar — Canvas yok, mobil uyumlu) ── */
+.vis-wrap{display:none;flex-direction:column;align-items:center;gap:4px;width:100%;max-width:340px}
+.vis-wrap.show{display:flex}
+.vis-bars{
+  display:flex;align-items:flex-end;justify-content:center;
+  gap:3px;height:52px;width:100%;
+  border:1px solid rgba(0,212,255,.18);
+  border-radius:8px;
+  background:rgba(0,4,12,.6);
+  padding:6px 8px;overflow:hidden;
+}
+.vbar{
+  flex:1;max-width:8px;border-radius:3px 3px 0 0;
+  background:linear-gradient(to top,var(--fire),var(--neon));
+  min-height:2px;
+  transition:height .08s ease-out;
+  box-shadow:0 0 4px var(--neon);
+}
+.vis-lbl{font-size:8px;letter-spacing:3px;color:var(--fire);text-shadow:0 0 6px var(--fire)}
 
-/* Mesajlar */
-.messages{width:100%;max-width:680px;max-height:220px;overflow-y:auto;margin:0 auto}
-.msg{padding:9px 13px;margin:6px 0;border-radius:10px;font-size:13px;line-height:1.55;word-wrap:break-word;white-space:pre-wrap}
-.msg.user{margin-left:auto;max-width:75%;background:rgba(0,212,255,0.09);border:1px solid var(--neon2)}
-.msg.bot{max-width:85%;background:var(--panel);border:1px solid var(--border)}
-.msg .ts{font-size:9px;color:var(--muted);margin-top:3px}
-.typing-dots{display:inline-flex;gap:4px;padding:2px 0}
-.typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--neon);animation:dot 1.2s infinite}
-.typing-dots span:nth-child(2){animation-delay:.2s}
-.typing-dots span:nth-child(3){animation-delay:.4s}
-@keyframes dot{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
+/* ── Mesajlar ── */
+.messages{flex:1;min-height:0;overflow-y:auto;padding:2px 0;display:flex;flex-direction:column;gap:6px}
+.msg{padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.55;word-break:break-word;white-space:pre-wrap;animation:msgIn .2s ease-out;max-width:88%}
+@keyframes msgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.msg.user{align-self:flex-end;background:rgba(0,212,255,.09);border:1px solid rgba(0,212,255,.2);border-radius:12px 3px 12px 12px}
+.msg.bot {align-self:flex-start;background:var(--panel);border:1px solid var(--bdr);border-radius:3px 12px 12px 12px}
+.msg.sys {align-self:center;background:rgba(255,200,0,.06);border:1px solid rgba(255,200,0,.2);color:#ffd46b;font-size:11px;border-radius:8px;max-width:92%}
+.msg.err {align-self:center;background:rgba(255,58,92,.07);border:1px solid rgba(255,58,92,.25);color:var(--red);font-size:11px;border-radius:8px;max-width:92%}
+.msg-ts{font-size:9px;color:var(--mut);margin-top:3px;display:block}
 
-/* INPUT */
-.inputbar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:28px;margin-top:8px}
-.inputbar input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:14px}
-.inputbar input::placeholder{color:var(--muted)}
-.mic-btn,.send-btn{background:transparent;border:none;color:var(--neon);font-size:17px;cursor:pointer;padding:5px 9px;border-radius:50%;transition:all .2s}
-.mic-btn:hover,.send-btn:hover{background:rgba(0,212,255,0.13)}
-.mic-btn.on{color:var(--fire);text-shadow:0 0 12px var(--fire);box-shadow:0 0 18px var(--fire2);animation:micPulse 1.2s infinite}
-@keyframes micPulse{50%{opacity:.35}}
+/* Yazıyor animasyonu */
+.typing-msg{display:flex;align-items:center;gap:5px;padding:10px 14px}
+.typing-msg span{width:7px;height:7px;border-radius:50%;background:var(--neon);animation:tdot 1.3s infinite}
+.typing-msg span:nth-child(2){animation-delay:.2s}
+.typing-msg span:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,80%,100%{transform:scale(.45);opacity:.3}40%{transform:scale(1);opacity:1}}
 
-/* NOTLAR */
-.notes-bar{display:flex;gap:8px;margin-bottom:12px}
-.notes-bar input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:13px}
-#note-new{background:var(--neon);color:#020810;border:none;border-radius:6px;padding:9px 14px;cursor:pointer;font-weight:700}
-.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-.note-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;position:relative}
-.note-card h4{color:var(--neon);font-size:13px;margin-bottom:5px}
-.note-card p{font-size:12px;color:var(--text);line-height:1.5;white-space:pre-wrap}
-.note-del{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px}
-.note-del:hover{color:var(--danger)}
+/* ── Input bar ── */
+.input-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 14px;
+  background:var(--panel);border:1px solid var(--bdr);border-radius:28px;
+  flex-shrink:0;transition:border-color .2s;
+}
+.input-bar:focus-within{border-color:var(--neon2);box-shadow:0 0 18px rgba(0,212,255,.07)}
+#chat-in{flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-size:14px;font-family:'Inter',sans-serif;min-width:0}
+#chat-in::placeholder{color:var(--mut)}
+.icon-btn{background:transparent;border:none;color:var(--neon);cursor:pointer;padding:6px;border-radius:50%;display:grid;place-items:center;transition:all .2s;flex-shrink:0}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor}
+.icon-btn:hover,.icon-btn:active{background:rgba(0,212,255,.13)}
+#mic-btn.on{color:var(--fire);box-shadow:0 0 14px var(--fire2);animation:micPulse 1.3s infinite}
+@keyframes micPulse{50%{opacity:.3}}
 
-/* AYARLAR */
-.setting-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
-.setting-card label{font-size:10px;letter-spacing:3px;color:var(--muted);display:block;margin-bottom:8px}
-.setting-card input[type=text]{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:14px}
-.setting-card input[type=range]{width:100%;accent-color:var(--neon);margin-bottom:4px}
-.setting-card small{color:var(--muted);font-size:10px}
-.pers-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.pers-btn{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;cursor:pointer;font-size:12px;transition:all .2s}
-.pers-btn:hover{border-color:var(--neon2)}
-.pers-btn.active{border-color:var(--neon);color:var(--neon);box-shadow:0 0 12px rgba(0,212,255,0.15) inset}
-.save-btn{background:var(--neon);color:#020810;border:none;border-radius:8px;padding:11px 22px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-right:10px;box-shadow:0 0 20px var(--neon2)}
-.test-btn{background:transparent;border:1px solid var(--fire);color:var(--fire);border-radius:8px;padding:11px 18px;cursor:pointer}
+/* ════════ NOTLAR ════════ */
+.sh{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sh h2{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:5px;color:var(--neon);text-shadow:0 0 10px var(--neon2)}
+.sinput{width:100%;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--txt);padding:9px 13px;font-size:13px;outline:none;flex-shrink:0;transition:border-color .2s}
+.sinput:focus{border-color:var(--neon2)}
+.notes-list{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.nc{background:var(--panel);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px;border-top:3px solid var(--neon);animation:msgIn .2s ease-out}
+.nc h4{font-size:13px;color:var(--txt);margin-bottom:4px}
+.nc .ncat{font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:6px;display:block}
+.nc p{font-size:12px;color:var(--txt2);white-space:pre-wrap;line-height:1.5}
+.nc-act{display:flex;gap:6px;margin-top:8px}
+.nc-btn{background:transparent;border:1px solid var(--bdr);border-radius:6px;color:var(--txt2);cursor:pointer;padding:3px 8px;font-size:11px;transition:all .15s}
+.nc-btn.del:hover{color:var(--red);border-color:var(--red)}
+.nc-btn:hover{color:var(--neon);border-color:var(--neon2)}
 
-/* FOOTER */
-.footer{position:fixed;bottom:0;left:0;right:0;padding:8px 24px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);letter-spacing:2px;background:rgba(2,6,16,0.8);display:flex;gap:16px;align-items:center}
-.footer .ok{color:var(--ok)}
-.footer .creator{color:var(--fire);text-shadow:0 0 8px var(--fire2)}
+/* Not formu */
+.note-form{display:flex;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--bdr);border-radius:var(--r);padding:14px;flex-shrink:0}
+.note-form[hidden]{display:none}
+.note-form input,.note-form textarea,.note-form select{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none;width:100%;font-family:'Inter',sans-serif;transition:border-color .2s}
+.note-form input:focus,.note-form textarea:focus,.note-form select:focus{border-color:var(--neon2)}
+.note-form textarea{resize:vertical}
+.note-form select{cursor:pointer}
+.nf-btns{display:flex;gap:8px;justify-content:flex-end}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* ════════ AYARLAR ════════ */
+.sgroup{background:var(--panel);border:1px solid var(--bdr);border-radius:var(--r);padding:14px;flex-shrink:0}
+.sgroup label{display:block;font-size:10px;letter-spacing:2px;color:var(--txt2);margin-bottom:8px}
+.sgroup input[type=text]{width:100%;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none;transition:border-color .2s}
+.sgroup input[type=text]:focus{border-color:var(--neon2)}
+.sgroup input[type=range]{width:100%;accent-color:var(--neon);cursor:pointer;margin-top:2px}
+.pers-row,.voice-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+.pb,.vb{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--txt2);padding:8px 12px;cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;transition:all .2s;-webkit-user-select:none;user-select:none}
+.pb:hover,.vb:hover{border-color:var(--neon2);color:var(--txt)}
+.pb.active,.vb.active{border-color:var(--neon);color:var(--neon);background:var(--neon3)}
 
-/* MOBİL */
-@media(max-width:600px){
-  .phoenix-wrap{width:200px;height:200px}
-  .phoenix-svg{width:125px;height:125px}
-  .r1{width:200px;height:200px}
-  .r2{width:155px;height:155px}
-  .r3{width:115px;height:115px}
-  .brand h1{font-size:18px;letter-spacing:6px}
-  .messages{max-height:180px}
-  #vis-canvas{width:320px}
+/* Butonlar */
+.btn-p{background:var(--neon);color:#020912;border:none;border-radius:8px;padding:9px 18px;font-weight:600;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;-webkit-user-select:none;user-select:none}
+.btn-p:hover,.btn-p:active{background:#33dcff;transform:translateY(-1px)}
+.btn-o{background:transparent;border:1px solid var(--bdr);color:var(--txt2);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;width:100%}
+.btn-o:hover,.btn-o:active{border-color:var(--neon2);color:var(--neon)}
+.btn-d{background:transparent;border:1px solid rgba(255,58,92,.3);color:var(--red);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;width:100%}
+.btn-d:hover{background:rgba(255,58,92,.08)}
+
+/* ════════ FOOTER ════════ */
+.footer{position:fixed;bottom:0;left:0;right:0;padding:7px 16px;border-top:1px solid var(--bdr);background:rgba(2,9,18,.88);backdrop-filter:blur(12px);display:flex;gap:12px;align-items:center;font-size:9px;letter-spacing:2px;color:var(--mut);z-index:20;height:36px}
+.f-ok{color:var(--grn)}
+.f-by{color:var(--fire);text-shadow:0 0 7px var(--fire2);margin-left:auto}
+
+/* ════════ MOBİL KÜÇÜK ════════ */
+@media(max-width:480px){
+  .topbar{padding:8px 12px}
+  .brand h1{font-size:15px;letter-spacing:7px}
+  :root{--nav-w:56px}
+  .ni{width:44px;font-size:7px}
+  .ni svg{width:16px;height:16px}
+  .globe-wrap{width:190px;height:190px}
+  .rg1{width:190px;height:190px}
+  .rg2{width:148px;height:148px}
+  .rg3{width:108px;height:108px}
+  .globe-svg{width:118px;height:118px}
+  .msg{font-size:12px}
+  .view{padding:10px 12px}
+  #view-chat{padding:8px 10px}
+}
+@media(min-width:768px){
+  .globe-wrap{width:240px;height:240px}
+  .rg1{width:240px;height:240px}
+  .rg2{width:185px;height:185px}
+  .rg3{width:136px;height:136px}
+  .globe-svg{width:150px;height:150px}
+  .vis-wrap{max-width:420px}
+  .notes-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .pers-row{gap:10px}
 }
